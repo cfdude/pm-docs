@@ -1,6 +1,6 @@
 ---
-title: "/pm:upgrade — Migrate State and Refresh Rules"
-sidebarTitle: "/pm:upgrade"
+title: "/pm:upgrade — Migrate State and Refresh PM Rules"
+sidebarTitle: "Upgrade"
 description: "Refresh the CLAUDE.md managed rules block, run any pending state migrations, re-render PROJECT.md, and stamp the new pmVersion. Safe to run more than once."
 ---
 
@@ -31,9 +31,6 @@ If you skip step 2, Claude Code is still executing the old plugin code and the u
   <Step title="Stamps pmVersion">
     The `pmVersion` field in `state.json` is updated to the newly installed version, so future `SessionStart` checks know the upgrade has been applied and stop showing the nudge.
   </Step>
-  <Step title="Prints the changelog delta">
-    PM prints the changelog entries between your previous version and the current one so you know exactly what changed and what new capabilities or behavior to expect.
-  </Step>
 </Steps>
 
 ## Idempotency
@@ -44,4 +41,13 @@ Running `/pm:upgrade` more than once is always safe. If your project is already 
   Always run `/reload-plugins` **before** `/pm:upgrade` when you've just installed a new version. If you skip the reload, Claude Code is still running the old plugin code, and the upgrade command will apply the old engine's logic rather than the new one. Reload first, then upgrade.
 </Warning>
 
-To see what changed between versions without running the upgrade, use `/pm:changelog`.
+## /pm:changelog — Review what changed between versions
+
+`/pm:changelog` surfaces the PM plugin's own changelog entries that are newer than a given version, so you know exactly what a release brought rather than just that an upgrade happened. By default, the floor is the version stamped in your project's `.conductor/state.json` (`pmVersion`) — so running it after an upgrade shows you everything that version introduced.
+
+`/pm:upgrade` automatically prints this changelog delta for the versions it crosses, so you see what changed as part of every upgrade. Use `/pm:changelog` directly to review the delta again or to inspect a different version range on demand.
+
+```text
+/pm:changelog              # entries newer than this repo's stamped pmVersion
+/pm:changelog --since 0.3.0   # everything released after 0.3.0
+```

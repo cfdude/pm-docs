@@ -1,5 +1,5 @@
 ---
-title: "Get Started with PM in Five Steps"
+title: "PM Quick Start: Initialize, Triage, and Start Building"
 sidebarTitle: "Quick Start"
 description: "Initialize PM in your Claude Code project, triage your first epic, and get your first status briefing and work recommendation in under five minutes."
 ---
@@ -30,12 +30,12 @@ After [installing PM](/installation), run `/pm:init` in any project to activate 
     After scaffolding, PM will present any epics it discovered and walk you through triage. For each epic you'll set:
 
     - **Priority** — `P0` (critical, do now) through `P3` (low, do later). This is the primary sort key for `/pm:next`.
-    - **Status** — `active` (currently being built), `queued` (ready to start), `planned` (not ready yet), or `untriaged` (just discovered, needs review).
+    - **Status** — `active` (currently being built), `queued` (ready to start), `later` (deprioritized, not yet ready), `planned` (roadmap item, not yet scaffolded), or `untriaged` (just discovered, needs review).
 
     If you have no existing OpenSpec proposals or Superpowers plans, PM starts with an empty backlog and you can add epics directly:
 
     ```bash
-    /pm:epic add --id my-feature --title "My first feature" --lane claude-code --priority P1
+    /pm:epic add my-feature "My first feature" claude-code P1
     ```
 
     Lanes tell PM which execution tool owns the work: `openspec` for spec-driven proposals, `superpowers` for Superpowers plans, `claude-code` for direct agentic work, `decision` for architecture decisions, and `external` for issues tracked outside the session.
@@ -93,7 +93,7 @@ After [installing PM](/installation), run `/pm:init` in any project to activate 
 
 After `/pm:init`, PM creates the following files in your project:
 
-```
+```text
 your-project/
 ├── .conductor/
 │   ├── state.json          # epics, detour stack, links, autonomy grants
@@ -111,7 +111,7 @@ your-project/
 
 Once initialized, the day-to-day PM workflow is a short cycle:
 
-```
+```text
 /pm:init → /pm:status → /pm:next → (build) → /pm:sync
                ↑                        │
                └──── /pm:detour ────────┤

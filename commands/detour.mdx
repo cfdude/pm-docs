@@ -31,14 +31,14 @@ If you invoke `/pm:detour --minimal "<what>"`, PM takes exactly this path and st
 
 A detour is substantial when it needs its own design, changes shared behavior, or is multi-step. It becomes its own epic in the appropriate lane and is worked through that lane's full workflow.
 
-When PM classifies a detour as substantial, it performs the following steps automatically:
+When a detour is substantial, follow these steps before building anything:
 
-1. Makes the current epic's `tasks.md` reflect reality and commits so nothing is left uncommitted.
-2. Sets the current epic's `status` to `paused` in `.conductor/state.json`.
-3. Pushes a stack frame with `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume: true` (default true whenever the detour will touch code the paused epic depends on).
-4. Creates the detour as a new epic with `role: detour` at P0 by default, in the appropriate lane.
-5. Records cross-links: the detour gets a `resolves-blocker-for` link pointing to the parent; the parent gets a `may-invalidate` link pointing to the detour.
-6. Sets the detour epic as active and opens its OpenSpec proposal.
+1. Make the current epic's `tasks.md` reflect reality and commit so nothing is left uncommitted.
+2. Set the current epic's `status` to `paused` in `.conductor/state.json`.
+3. Push a stack frame with `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume: true` (default true whenever the detour will touch code the paused epic depends on).
+4. Create the detour as a new epic with `role: detour` at P0 by default, in the appropriate lane.
+5. Record cross-links: the detour gets a `resolves-blocker-for` link pointing to the parent; the parent gets a `may-invalidate` link pointing to the detour.
+6. Set the detour epic as active, then create its OpenSpec proposal and build through the normal propose → review → apply → review → commit → archive loop.
 
 **Example:** You're mid-build on `api-gateway` (openspec, P1) when you discover webhook HMAC verification is broken in production. That's substantial — it needs its own spec, and its fix will change the shared request-validation path the `api-gateway` work depends on. PM pauses `api-gateway`, pushes a stack frame, and creates `webhook-hmac-fix` (P0, role: detour), then opens a fresh proposal for it.
 

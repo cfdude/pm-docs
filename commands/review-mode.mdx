@@ -1,5 +1,5 @@
 ---
-title: "/pm:review-mode — Set the Repo Review Intensity"
+title: "/pm:review-mode — Configure the Repo Review Intensity"
 sidebarTitle: "/pm:review-mode"
 description: "Set the repo review dial: off (self-review only), standard (one reviewer per gate), or thorough (two independent reviewers, adjudicated on disagreement)."
 ---
@@ -18,12 +18,12 @@ If `set-review-mode` has never been run, the mode is `standard` — matching the
 
 ## Setting repo review mode
 
-Pass the desired mode as a positional argument:
+Pass the desired mode with the `--mode` flag:
 
 ```bash
-conductor.mjs set-review-mode off
-conductor.mjs set-review-mode standard
-conductor.mjs set-review-mode thorough
+conductor.mjs set-review-mode --mode off
+conductor.mjs set-review-mode --mode standard
+conductor.mjs set-review-mode --mode thorough
 ```
 
 Re-running the command replaces the prior mode outright — there is only one active mode at a time. The `CLAUDE.md` rules block is refreshed automatically so the "Current mode" line stays accurate.

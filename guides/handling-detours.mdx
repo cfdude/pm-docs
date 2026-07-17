@@ -1,5 +1,5 @@
 ---
-title: "Handle Interruptions Without Losing Your Place"
+title: "Handle Mid-Build Interruptions Without Losing Your Place"
 sidebarTitle: "Handling Detours"
 description: "Use PM's detour stack to park current work, build the interrupt, and resume cleanly — with a mandatory reconcile gate that re-validates your plan first."
 ---
@@ -66,13 +66,13 @@ This is the most important step. Before touching a single file, run `/pm:detour 
 
 1. **Verify** the detour epic is `archived` and its work is committed. If it's not, it's not time to resume — finish the detour first.
 2. **Pop** the top stack frame from `detourStack`. Set the paused epic's status back to `active` and update the `active` pointer.
-3. **Run the reconcile gate** — if the stack frame had `reconcileOnResume: true`, PM delegates a fresh-context review to the `reconciler` agent via the Task tool, passing the paused epic id and the detour epic id. The reconciler re-reads the paused proposal cold, diffs what the detour actually shipped, and reports back a verdict.
+3. **Run the reconcile gate** — if the stack frame had `reconcileOnResume: true`, PM delegates a fresh-context review to a dedicated reconcile agent via the Task tool, passing the paused epic id and the detour epic id. The agent re-reads the paused proposal cold, diffs what the detour actually shipped, and reports back a verdict.
 4. **Write the verdict back durably** — this is what actually clears `reconcileNeeded`. The result is not just narrated in the transcript; it is attached to the paused epic's link in `.conductor/state.json` via `record-reconcile`.
 5. **State the next story** — after a valid or amended reconcile, PM tells you exactly which story to build next on the resumed epic.
 
 ## What the reconcile gate checks
 
-The `reconciler` agent runs in a completely fresh context. It has no memory of the original build session. Given the paused epic id and the detour epic id, it:
+The reconcile agent runs in a completely fresh context. It has no memory of the original build session. Given the paused epic id and the detour epic id, it:
 
 - Re-reads the paused proposal in full
 - Diffs what the detour actually changed against what the proposal assumed
@@ -80,7 +80,7 @@ The `reconciler` agent runs in a completely fresh context. It has no memory of t
 
 **`valid`** — the detour didn't affect the paused proposal's assumptions. Resume building as planned.
 
-**`invalidated`** — the detour changed something the paused proposal depends on. The reconciler lists specific amendments: stories to add, remove, or rewrite. Update the proposal and `tasks.md` before writing any code.
+**`invalidated`** — the detour changed something the paused proposal depends on. The agent lists specific amendments: stories to add, remove, or rewrite. Update the proposal and `tasks.md` before writing any code.
 
 Either way, the verdict plus any amendments are written back durably via `record-reconcile`, attaching `{verdict, amendments, reconciledAt}` to the paused epic's `may-invalidate` link. The judgment survives past this conversation and is visible in future briefings.
 

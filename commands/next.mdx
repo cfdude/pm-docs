@@ -1,6 +1,6 @@
 ---
-title: "/pm:next — Get a Concrete Work Recommendation"
-sidebarTitle: "/pm:next"
+title: "/pm:next — Get a Concrete Next-Work Recommendation"
+sidebarTitle: "Next"
 description: "PM reads the current state and recommends exactly one thing to work on next, following the detour-stack-first, then priority-order decision rule."
 ---
 
@@ -24,13 +24,7 @@ PM applies the following order every time you call `/pm:next`:
 
 ## What it does after choosing
 
-Once PM identifies the next epic, it makes that epic active through the engine CLI:
-
-```bash
-node "$ENGINE" set-active <epic-id>
-```
-
-`set-active` does three things atomically: it updates the top-level `.active` pointer in `state.json`, sets the chosen epic's `status` to `active`, and demotes any previously-active epic back to `queued`. This keeps the briefing's **NOW** line accurate without requiring you to manually update state.
+Once PM identifies the next epic, it makes that epic active by updating `state.json` atomically: the top-level `.active` pointer is set, the chosen epic's `status` is set to `active`, and any previously-active epic is demoted back to `queued`. This keeps the briefing's **NOW** line accurate without requiring you to manually update state.
 
 PM then states the specific next story or phase to build — not just the epic name, but the concrete unit of work within it.
 

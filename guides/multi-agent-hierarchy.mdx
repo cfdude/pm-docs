@@ -1,5 +1,5 @@
 ---
-title: "Run Multi-Agent Epics with PM Hierarchy"
+title: "Run Multi-Agent Epic Batches with PM's Hierarchy Harness"
 sidebarTitle: "Multi-Agent"
 description: "Dispatch a parent epic's children as worktree-isolated, unattended agents. PM converges their work back through sequential merge with zero data loss."
 ---
@@ -64,7 +64,7 @@ PM blocks dispatch for any child that does not show `autonomous: true`. Do not a
 
 ## Dispatching
 
-Each child runs as a `hierarchy-child-executor` agent in its own `hierarchy-child/<epic-id>` git worktree and branch. The orchestrator dispatches them via the Task tool. Within a batch, children with no dependencies on each other may be dispatched in parallel in the same turn.
+Each child runs as its own isolated agent in a dedicated `hierarchy-child/<epic-id>` git worktree and branch. The orchestrator dispatches them via the Task tool. Within a batch, children with no dependencies on each other may be dispatched in parallel in the same turn.
 
 Children never write `.conductor/state.json` themselves. They execute their work and return a structured report. The orchestrator is the sole writer of state transitions, applied in one pass after each batch completes — never interleaved with dispatch. This is what makes parallel dispatch safe for the state file: there is only ever one writer.
 
@@ -73,7 +73,7 @@ Children never write `.conductor/state.json` themselves. They execute their work
 After each child completes, the orchestrator merges its worktree branch back. An ordinary merge conflict is never a hard stop — PM has a tiered resolution ladder:
 
 1. **Normal `git merge`** — fast-path; most merges land cleanly
-2. **`merge-conflict-resolver` agent** — dispatched automatically when a normal merge fails; reads both sides and the merge base to resolve the conflict
+2. **Conflict-resolver agent** — dispatched automatically when a normal merge fails; reads both sides and the merge base to resolve the conflict
 3. **Escalation** — if the resolver reports `STATUS: uncertain`, retry with a more capable model or consult the `advisor()` tool before finalizing
 4. **Logged follow-up epic** — if still unresolvable, commit the best-effort resolution (still fully recoverable via git history) and log a new follow-up epic under the same parent
 

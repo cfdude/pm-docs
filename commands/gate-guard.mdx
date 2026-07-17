@@ -1,5 +1,5 @@
 ---
-title: "/pm:gate-guard — Inspect the Reconcile Gate Guard"
+title: "/pm:gate-guard — Block Writes While a Reconcile Is Owed"
 sidebarTitle: "/pm:gate-guard"
 description: "A PreToolUse hook that blocks writes while the active epic owes a reconcile. Always on for that case — running set-gate-guard off will not bypass it."
 ---
@@ -15,9 +15,9 @@ Every `Edit`, `Write`, and `NotebookEdit` call is intercepted by the hook. Befor
 
 ## Always on for reconcile-owed epics
 
-As of the `gate-guard-default-on-reconcile` change, this check is **always active** for any epic carrying `reconcileNeeded: true` — including epics that already had the flag before this change was introduced. It previously required an explicit `set-gate-guard on`; real-usage feedback showed that opt-in was never turned on across several sessions where it would have caught a real skip, so the default was flipped.
+This check is **always active** for any epic carrying `reconcileNeeded: true` — including epics that already had the flag set before this behavior was introduced. It previously required an explicit `set-gate-guard on`; real-usage feedback showed that opt-in was never actually turned on across several sessions where it would have caught a real skip, so the default was flipped.
 
-**There is no bypass for this case.** Running `set-gate-guard off` does **not** silence the reconcile-owed block. The only path through it is completing the reconcile gate: run `/pm:resume`, delegate to the reconciler agent per the POP protocol, and let the reconcile gate clear `reconcileNeeded`. Once cleared, file writes proceed as normal.
+**There is no bypass for this case.** Running `set-gate-guard off` does **not** silence the reconcile-owed block. The only path through it is completing the reconcile gate: run `/pm:resume`, let the reconciler agent complete the reconcile gate, and the block clears automatically. Once cleared, file writes proceed as normal.
 
 ## The `set-gate-guard` command
 

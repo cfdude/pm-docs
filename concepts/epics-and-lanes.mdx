@@ -41,6 +41,8 @@ Every epic moves through a defined set of statuses. The normal progression is li
 | `queued` | Prioritized and ready to work. Eligible for `/pm:next` selection. |
 | `active` | Currently being worked. Only one epic is active at a time (set via `set-active`). |
 | `paused` | Pushed onto the detour stack. Will be restored to `active` when `/pm:resume` pops it. |
+| `later` | Deferred — not yet planned or queued. Lower-commitment than `planned`; use for items you want to track without committing to a roadmap slot. |
+| `blocked` | Cannot proceed because an external condition or dependency is unresolved. Distinct from `paused` — no detour stack frame is involved. |
 | `archived` | Done. For `openspec`-lane epics, Gate 2 must be recorded before this transition is allowed. |
 
 ## Priority
@@ -61,12 +63,12 @@ Epics can be related to each other via typed links. Links are directional and re
 
 | Link type | Meaning |
 |-----------|---------|
-| `blocks` | This epic must be archived before the linked epic can start. `/pm:next` skips starved epics and names the blocker. |
-| `depends-on` | A softer dependency — this epic relies on the linked epic's output but isn't hard-blocked from starting. |
+| `depends-on` | This epic relies on the linked epic's output. `/pm:next` skips any epic whose `depends-on` target is still unresolved and names the blocking epic explicitly. |
 | `resolves-blocker-for` | This epic (typically a detour) exists to unblock the linked epic. Set on the detour. |
 | `may-invalidate` | The linked epic's design **may have been invalidated** by this epic's changes. Set on the parent when a detour is pushed. This is the reconcile relationship — it connects a detour to the epic it might have made stale. |
+| `relates-to` | A general association between two epics — no ordering or dependency semantics. |
 
-The `may-invalidate` link is the most important in the system. When the detour is archived and `/pm:resume` runs, this link is what the reconciler agent reads to understand which paused proposal to re-validate. The verdict is written back durably onto this link as `{verdict, amendments, reconciledAt}`.
+The `may-invalidate` link is the most important in the system. When the detour is archived and `/pm:resume` runs, the reconcile gate re-validates the paused proposal against what the detour actually shipped. The verdict is written back durably onto this link as `{verdict, amendments, reconciledAt}`.
 
 ## Hierarchy
 

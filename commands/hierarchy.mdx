@@ -1,5 +1,5 @@
 ---
-title: "/pm:hierarchy — Multi-Agent Worktree Dispatch"
+title: "/pm:hierarchy — Plan and Dispatch a Multi-Agent Hierarchy"
 sidebarTitle: "/pm:hierarchy"
 description: "Plan and dispatch a parent epic's children as batched, worktree-isolated agents. Each child runs unattended in its own branch and merges back sequentially."
 ---
@@ -55,7 +55,7 @@ Run the full preflight scan for each child first — read its complete source, i
 
 ## Dispatching
 
-Each child runs as a `hierarchy-child-executor` agent in its own `git worktree` on its own branch (`hierarchy-child/<epic-id>`). Epics within the same batch that have no dependencies on each other may be dispatched in parallel using the Task tool.
+Each child runs as an isolated subagent in its own `git worktree` on its own branch (`hierarchy-child/<epic-id>`). Epics within the same batch that have no dependencies on each other may be dispatched in parallel using the Task tool.
 
 **The orchestrator is the sole writer of `.conductor/state.json` throughout.** Children never write state directly — they return a fixed report, and you apply all state transitions in one pass after the batch (marking each merged child `archived`). This is what makes parallel dispatch safe for the state file: there is only ever one writer, so there is nothing to merge-conflict on `state.json`.
 
@@ -64,8 +64,8 @@ Each child runs as a `hierarchy-child-executor` agent in its own `git worktree` 
 After each child completes, merge its worktree branch back sequentially — one at a time, even though the work ran in parallel. On a merge conflict, work through the resolution ladder in order:
 
 1. Attempt the merge normally (fast path).
-2. On conflict, dispatch the `merge-conflict-resolver` agent to read both sides plus the merge base and resolve it.
-3. If the resolver reports `STATUS: uncertain`, escalate — retry with a more capable model and/or consult the `advisor()` tool before finalizing.
+2. On conflict, dispatch a subagent to read both sides plus the merge base and resolve it.
+3. If the subagent reports `STATUS: uncertain`, escalate — retry with a more capable model before finalizing.
 4. If still genuinely unresolvable, commit the best-effort resolution and log a follow-up epic under the same parent, then continue.
 
 Mechanical conflicts — such as a shared CHANGELOG header or usage string — resolve automatically at the merge step and are never a real logic collision.

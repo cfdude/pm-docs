@@ -1,7 +1,7 @@
 ---
 title: "State Files: How PM Persists Project Context"
 sidebarTitle: "State & Files"
-description: "PM stores all project-management state in .conductor/state.json and renders a human-readable PROJECT.md view. Here is what each file contains and the rules around editing them."
+description: "PM persists all state in .conductor/state.json and renders PROJECT.md from it. Learn what each file contains and the rules around editing them."
 ---
 
 PM's source of truth lives in `.conductor/state.json`. Every epic, every detour stack frame, every link, every tracker configuration — it's all in that one JSON file. `PROJECT.md` is a generated view rendered from it and should never be hand-edited. Understanding what each file is for — and what the rules around touching them are — prevents the class of state corruption that's hardest to debug: a file that looks valid but disagrees with the real state.
@@ -48,7 +48,7 @@ A minimal real example of a `claude-code`-lane epic with inline stories:
   "links": [],
   "reconcileNeeded": false,
   "stories": [
-    { "title": "TDD: remove-epic hard-delete, --cascade, link-stripping tests", "done": true },
+    { "title": "TDD: remove-epic hard-delete, --cascade, link-stripping, active-clear tests", "done": true },
     { "title": "Implement removeEpic() + dispatch registration", "done": true },
     { "title": "commands/epic.md + README.md docs", "done": true },
     { "title": "Fresh-context code review (standard review mode)", "done": false }

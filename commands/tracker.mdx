@@ -1,5 +1,5 @@
 ---
-title: "/pm:tracker — Connect an External Issue Tracker"
+title: "/pm:tracker — Connect an External Tracker to Your Repo"
 sidebarTitle: "/pm:tracker"
 description: "Mirror epics to Jira, Linear, GitHub Issues, or any tracker. PM shapes the sync instructions; your agent executes them using your existing tooling."
 ---
@@ -88,7 +88,17 @@ During `/pm:sync`, your agent:
 
 1. Lists open issues with `gh issue list --repo <repo> --state open --json number,title,url,labels`.
 2. Checks whether an epic already has that issue number as its `externalId` — if so, skips it.
-3. Registers new issues as epics with `--status untriaged`, using any `P0`–`P3` label as the priority (defaulting to `P2`).
+3. Registers each new issue as an epic:
+   ```bash
+   conductor.mjs add-epic --status untriaged \
+     --external-id <issue-number> \
+     --external-url <issue-url> \
+     --lane claude-code \
+     --title "<issue-title>" \
+     --priority P2
+   ```
+   If the issue carries a `P0`/`P1`/`P2`/`P3` label, use that label's priority instead of the `P2` default.
+4. `add-epic` itself rejects a duplicate `--external-id` (exits non-zero, writes nothing) as a second line of defense against a stale local view producing a duplicate.
 
 `github-issues` does **not** auto-create GitHub Issues for local epics. That direction is intentionally omitted to avoid silently creating public issues on your behalf.
 

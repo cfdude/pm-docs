@@ -1,6 +1,6 @@
 ---
-title: "/pm:sync — Register New Proposals and Plans"
-sidebarTitle: "/pm:sync"
+title: "/pm:sync — Register New Proposals and External Issues"
+sidebarTitle: "Sync"
 description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issues not yet tracked as epics and register them. Deduplicates automatically."
 ---
 
@@ -29,5 +29,5 @@ Sync never creates duplicate epics. For OpenSpec and Superpowers sources, dedupl
 Run `/pm:sync` after **pulling changes from another branch** that may have introduced new OpenSpec proposals, after **generating new proposals** in the current session, at the **start of a session** when you know new work was filed in your issue tracker since you last worked, or any time you suspect the epic index is out of date relative to disk.
 
 <Note>
-  For `github-issues` sync, the PM engine itself never calls `gh` — it only scans local files. The CLAUDE.md rules block instructs your Claude Code agent to run `gh issue list`, check each result against existing `externalId` values in `state.json`, and call `add-epic --status untriaged --external-id <n> --external-url <url> --lane claude-code --priority P2` for any new issues. The label-driven priority override (`P0`–`P3` labels) is applied at this step. Configure your GitHub tracker via `/pm:tracker` before expecting issue sync to work.
+  For `github-issues` sync, the engine itself only scans local files and never calls an external system directly. When `github-issues` is configured (via `/pm:tracker`), the sync process fetches open issues, deduplicates them against existing `externalId` values in `state.json`, and registers each new issue as an untriaged `claude-code`-lane epic at `P2`. Any `P0`–`P3` label present on the issue overrides the `P2` default. Configure your GitHub tracker via `/pm:tracker` before expecting issue sync to work.
 </Note>

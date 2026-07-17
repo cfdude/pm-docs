@@ -1,10 +1,10 @@
 ---
-title: "/pm:status — View the Current Project Briefing"
-sidebarTitle: "/pm:status"
-description: "Re-render PROJECT.md from state.json and display the full conductor briefing: active epic, detour stack, next-up queue, lane counts, and tracker sync."
+title: "/pm:status — Display the Current Project Briefing"
+sidebarTitle: "Status"
+description: "Re-render PROJECT.md from state.json and display the full briefing: active epic, detour stack, next-up queue, lane counts, and tracker sync status."
 ---
 
-`/pm:status` re-renders `PROJECT.md` from the current state and summarizes the project's position: what's actively being built, what's paused and why, what's queued next, and how many epics exist per lane. It's the fastest way to re-orient yourself at the start of a session or after any state-changing operation.
+`/pm:status` runs the conductor engine's `render` command, then reads `PROJECT.md` and summarizes the project's position: what's actively being built, what's paused and why, what's queued next, and how many epics exist per lane. It's the fastest way to re-orient yourself at the start of a session or after any state-changing operation.
 
 ## What the briefing shows
 

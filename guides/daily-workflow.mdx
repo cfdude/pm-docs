@@ -1,5 +1,5 @@
 ---
-title: "Daily Workflow with PM in Claude Code"
+title: "The Daily PM Workflow in Claude Code: Start to Commit"
 sidebarTitle: "Daily Workflow"
 description: "A practical guide to using PM day-to-day: starting sessions, checking status, picking work, and keeping your epic queue healthy across context compactions."
 ---
@@ -73,7 +73,7 @@ You do not need to do anything special after a compaction. PM handles the handof
 
 ## After every git commit
 
-The `PostToolUse` hook fires after every Bash tool use that includes a `git commit`. PM runs `commit-nudge`, which does two things:
+The `PostToolUse` hook fires after every Bash tool use. PM runs `commit-nudge`, which inspects whether the invocation included a `git commit` and does two things:
 
 1. Re-renders `PROJECT.md` so the index stays current.
 2. Inspects the commit shape to detect whether it looks like an unlogged minimal detour — a small, self-contained fix that happened silently. If it does, PM suggests running `log-detour` to append a timestamped record to `.conductor/detours.log`.

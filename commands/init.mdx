@@ -1,19 +1,16 @@
 ---
-title: "/pm:init — Initialize PM in Your Project"
-sidebarTitle: "/pm:init"
-description: "Scaffold .conductor/state.json, register existing epics, write the CLAUDE.md rules block, and render PROJECT.md. Safe to re-run — it's a no-op if already initialized."
+title: "/pm:init — Initialize PM in Your Project Directory"
+sidebarTitle: "Init"
+description: "Scaffold .conductor/state.json, register existing OpenSpec epics, write the CLAUDE.md rules block, and render PROJECT.md. Safe to re-run."
 ---
 
-`/pm:init` bootstraps PM in your project. Run it once in any directory — it creates the `.conductor/` state directory, scans for existing OpenSpec proposals and Superpowers plans to register as epics, writes the managed rules block into `CLAUDE.md`, and renders the initial `PROJECT.md`. Until you run this command, all of PM's hooks stay dormant in your project, so this is always your first step.
+`/pm:init` bootstraps PM in your project. Run it once in any directory — it creates the `.conductor/` state directory, scans for existing OpenSpec proposals to register as epics, writes the managed rules block into `CLAUDE.md`, and renders the initial `PROJECT.md`. Until you run this command, all of PM's hooks stay dormant in your project, so this is always your first step.
 
 ## What it creates
 
 <CardGroup cols={2}>
   <Card title=".conductor/state.json" icon="database">
     The single source of truth for every epic, the detour stack, tracker config, and the `pmVersion` stamp. All engine operations read and write this file.
-  </Card>
-  <Card title=".conductor/detours.log" icon="scroll">
-    An append-only trail of every PUSH and POP event in the detour stack. Empty on first init — entries accumulate as you use `/pm:detour` and `/pm:resume`.
   </Card>
   <Card title="CLAUDE.md rules block" icon="book-open">
     A managed section injected into your project's `CLAUDE.md` that carries the PM discipline — lanes, statuses, detour workflow, and decision rules — into every Claude Code session automatically.
@@ -30,7 +27,7 @@ description: "Scaffold .conductor/state.json, register existing epics, write the
     The conductor engine creates `.conductor/state.json` with an empty epic index, an empty detour stack, and a `pmVersion` stamp matching your installed version.
   </Step>
   <Step title="Scans for existing work">
-    PM scans for OpenSpec change directories (`openspec/changes/<id>/`) and Superpowers plan files. Any found are registered as `untriaged` epics in the appropriate lane so no prior work is lost.
+    PM scans for OpenSpec change directories (`openspec/changes/<id>/`). Any found are registered as `untriaged` epics in the `openspec` lane so no prior work is lost.
   </Step>
   <Step title="Writes the CLAUDE.md rules block">
     The managed rules block is inserted into `CLAUDE.md` (or the file is created if it doesn't exist). The block is delimited so future `/pm:upgrade` calls can refresh it without touching your surrounding content.
@@ -75,16 +72,15 @@ DETOUR STACK
 
 NEXT UP
   [P?] auth-overhaul        untriaged   openspec
-  [P?] dashboard-redesign   untriaged   superpowers
+  [P?] dashboard-redesign   untriaged   openspec
 
 LANE COUNTS
-  openspec     1 epic   (1 untriaged)
-  superpowers  1 epic   (1 untriaged)
+  openspec     2 epics   (2 untriaged)
 
 TRACKER SYNC
   (no tracker configured)
 ```
 
 <Note>
-  PM's hooks — `SessionStart`, `PreCompact`, `PostToolUse`, and `PreToolUse` — stay dormant in your project until `/pm:init` runs. This is intentional, matching the same design as `openspec init`. Running init is what arms the hooks for all future sessions.
+  PM's hooks stay dormant in your project until `/pm:init` runs. This is intentional, matching the same design as `openspec init`. Running init is what arms the hooks for all future sessions.
 </Note>

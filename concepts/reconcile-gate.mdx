@@ -4,7 +4,7 @@ sidebarTitle: "Reconcile Gate"
 description: "The reconcile gate runs a fresh-context re-validation of your paused epic against what the detour actually shipped, before any new code is written."
 ---
 
-The reconcile gate is the safety mechanism that fires every time you pop a detour. A fresh-context reconciler agent re-reads the paused epic's proposal and diffs what the detour actually changed, then delivers a verdict — `valid` or `invalidated` — before a single new line of code gets written. This is PM's answer to a real problem: the thing that got interrupted doesn't get to just "remember" what was planned. It gets re-validated, the same discipline as saving and restoring context around a hardware interrupt.
+The reconcile gate is the safety mechanism that fires every time you pop a detour. A fresh-context review re-reads the paused epic's proposal and diffs what the detour actually changed, then delivers a verdict — `valid` or `invalidated` — before a single new line of code gets written. This is PM's answer to a real problem: the thing that got interrupted doesn't get to just "remember" what was planned. It gets re-validated, the same discipline as saving and restoring context around a hardware interrupt.
 
 ## Why it exists
 
@@ -18,11 +18,11 @@ Resuming blindly means building on a stale plan. If the detour was substantial e
   <Step title="Resume triggers the gate">
     `/pm:resume` pops the top detour stack frame and checks whether `reconcileOnResume` was `true`. If yes, `reconcileNeeded: true` is set on the paused epic and the gate fires before any code can be written.
   </Step>
-  <Step title="A fresh-context reconciler agent is dispatched">
-    The `reconciler` agent is dispatched via the Task tool with the paused epic id and the detour epic id. It runs in a clean context with no prior conversation history — this is intentional, preventing any in-session assumptions from contaminating the review.
+  <Step title="A fresh-context review is dispatched">
+    A clean-context review is delegated via the Task tool with the paused epic id and the detour epic id. It runs with no prior conversation history — this is intentional, preventing any in-session assumptions from contaminating the review.
   </Step>
-  <Step title="The reconciler reads and diffs">
-    The reconciler reads the paused epic's proposal (and `tasks.md` for `openspec`-lane epics), then diffs what the detour actually shipped. It returns a structured response:
+  <Step title="The review reads and diffs">
+    The review reads the paused epic's proposal (and `tasks.md` for `openspec`-lane epics), then diffs what the detour actually shipped. It returns a structured response:
     - `VERDICT: valid` or `VERDICT: invalidated`
     - `AMENDMENTS:` — one amendment per line (stories to add, remove, or change). Empty if valid.
   </Step>
@@ -42,7 +42,7 @@ Resuming blindly means building on a stale plan. If the detour was substantial e
 
 <CardGroup cols={2}>
   <Card title="valid" icon="circle-check">
-    The detour's changes don't affect the paused epic's design or task list. The reconciler says so explicitly. State is updated and you can resume building. No amendments needed.
+    The detour's changes don't affect the paused epic's design or task list. The review says so explicitly. State is updated and you can resume building. No amendments needed.
   </Card>
   <Card title="invalidated" icon="triangle-exclamation">
     The detour shipped changes that conflict with or supersede part of the paused proposal. You must update the OpenSpec proposal and `tasks.md` (or the `stories[]` for a `claude-code`-lane epic) to reflect the amendments before writing new code.

@@ -91,7 +91,7 @@ When the detour epic is archived and `/pm:resume` runs:
     Set the paused epic's `status` back to `active` and call `set-active <paused-id>`.
   </Step>
   <Step title="Run the reconcile gate">
-    If `reconcileOnResume` was `true`, the reconcile gate fires now. A fresh-context `reconciler` agent re-reads the paused proposal and diffs what the detour actually shipped. Do not write code until the gate clears. See [The Reconcile Gate](/concepts/reconcile-gate) for the full flow.
+    If `reconcileOnResume` was `true`, the reconcile gate fires now. A fresh-context review re-reads the paused proposal and diffs what the detour actually shipped. Do not write code until the gate clears. See [The Reconcile Gate](/concepts/reconcile-gate) for the full flow.
   </Step>
 </Steps>
 

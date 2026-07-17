@@ -1,5 +1,5 @@
 ---
-title: "Mirror Epics to Jira, Linear, or GitHub Issues"
+title: "Connect PM to Jira, Linear, or GitHub Issues Trackers"
 sidebarTitle: "External Trackers"
 description: "Configure PM to mirror epics to an external issue tracker. PM shapes the instructions; your agent executes them with whatever tooling the project uses."
 ---
@@ -25,7 +25,18 @@ The engine never opens a network connection to an external system. It never call
     Define `statusIntent` — a mapping from PM's lifecycle statuses to semantic descriptions of where a tracker issue should land. These are semantic targets, not literal workflow transition names. Your agent resolves the actual transition using its own knowledge of the tracker's workflow.
   </Step>
   <Step title="PM records the tracker block and updates CLAUDE.md">
-    PM calls `set-tracker` to write the tracker configuration into `.conductor/state.json` and refreshes the managed rules block in `CLAUDE.md` with an "External tracker sync" section. The `TRACKER SYNC` line appears in the session briefing from this point on.
+    PM calls `set-tracker` under the hood to write the tracker configuration into `.conductor/state.json` and refreshes the managed rules block in `CLAUDE.md` with an "External tracker sync" section. The `TRACKER SYNC` line appears in the session briefing from this point on.
+
+    For reference, the underlying `set-tracker` command uses `--intent` flags (repeatable — one `<status>:<target>` per entry):
+
+    ```bash
+    node "$ENGINE" set-tracker \
+      --system jira --instance your-company --project PROJ --mechanism mcp \
+      --intent untriaged:backlog --intent queued:todo --intent active:in-progress \
+      --intent paused:todo --intent planned:backlog --intent archived:done
+    ```
+
+    Re-running `set-tracker` merges — only the flags you pass change. It also refreshes the CLAUDE.md rules block automatically.
   </Step>
 </Steps>
 

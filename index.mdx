@@ -1,10 +1,12 @@
 ---
-title: "PM: Project Manager for Claude Code"
+title: "PM: Epic Tracking and Detour Stack for Claude Code"
 sidebarTitle: "Home"
-description: "PM is a lightweight Claude Code plugin that keeps multi-epic projects on track across detours, context compaction, and unattended agent runs."
+description: "A Claude Code plugin that tracks epics with lane routing, maintains a detour stack, and enforces a reconcile gate. Zero dependencies. No lost context."
 ---
 
-PM is the memory layer your Claude Code sessions have been missing. It tracks every epic in flight, maintains an explicit detour stack so interruptions never lose their place, and enforces a reconcile gate on resume — all without replacing the tools you already use. Install it once, run `/pm:init`, and it stays oriented across every context compaction.
+PM is the memory layer your Claude Code sessions have been missing. When context gets compacted or an interrupt derails a build, most sessions lose three things: what they were working on, what is still outstanding, and what to pick up next. PM answers all three — **mechanically, not from memory** — by tracking every epic in flight, maintaining an explicit detour stack so interruptions never lose their place, and enforcing a reconcile gate on every resume.
+
+Install it once, run `/pm:init`, and it stays oriented across every context compaction. Zero npm dependencies. Pure Node 18+ built-ins.
 
 <CardGroup cols={2}>
   <Card title="Introduction" icon="circle-info" href="/introduction">
@@ -21,15 +23,69 @@ PM is the memory layer your Claude Code sessions have been missing. It tracks ev
   </Card>
 </CardGroup>
 
-## What PM Solves
+## Why PM?
 
-Every Claude Code session that spans more than one context window faces the same three questions the moment the context is compacted or an interrupt hits:
+Every Claude Code session that spans more than one context window faces the same failure modes the moment the context is compacted or an interrupt hits:
 
-1. What were we working on before the detour?
-2. What work is currently outstanding?
-3. What is the next highest-priority item?
+- **You lose your place mid-build.** An interrupt arrives while you're deep in an epic. There's no structured way to park it and come back — so either the interrupt wins and the epic is abandoned, or you ignore the interrupt and lose that work instead.
+- **Resume is a guess.** After a context compaction, the agent re-reads the project from scratch. Without a durable briefing, it re-derives state from conversation history — which is exactly what compaction just erased.
+- **Multi-epic priority is implicit.** When several epics are in flight, priority lives in the conversation. The moment that conversation is gone, so is the priority ordering.
+- **Parallel agents share mutable state.** Multi-agent builds that write to the same working tree produce conflicts that aren't mechanical — they're logical, and no merge driver can resolve them.
 
-PM answers all three — mechanically, not from memory.
+PM solves all four with concrete mechanisms: **epics** (durable work units with statuses and priority), **lanes** (routing rules that determine how each epic is built), the **detour stack** (a structured PUSH/POP around any interruption), and the **reconcile gate** (a mandatory fresh-context re-validation before a paused epic can resume).
+
+## Real Numbers
+
+Not benchmarks — numbers pulled from this repo's own history, verifiable in `git log`:
+
+| Metric | Value |
+|--------|-------|
+| Agents dispatched through PM's multi-agent harness | **21** |
+| Releases shipped end-to-end (spec → build → test → changelog → bump → release) | **26** |
+| Tests | **189** |
+| npm dependencies | **0** |
+
+21 agents ran across two dogfooding batches — worktree-isolated, unattended, converging back through sequential merge with zero data loss and zero unresolvable conflicts. Every conflict was mechanical (a shared CHANGELOG header, a usage string) — never a real logic collision.
+
+## How It Works
+
+<Steps>
+  <Step title="Initialize">
+    Run `/pm:init` in your project. PM scaffolds `.conductor/state.json`, writes a managed rules block into `CLAUDE.md`, and registers any existing OpenSpec proposals or Superpowers plans as epics. A `SessionStart` hook is installed that re-injects the full project briefing after every context compaction — automatically.
+  </Step>
+  <Step title="Work epics in lanes">
+    Every unit of work is an **epic** routed through a **lane** — `openspec` (spec-driven proposal workflow), `superpowers` (execution-focused TDD), `claude-code` (direct implementation), `decision` (lightweight ADR), or `external` (tracker-mirrored). `/pm:status` shows the current briefing; `/pm:next` picks the highest-priority item, respecting `depends-on` links and the detour stack.
+  </Step>
+  <Step title="Handle interrupts without losing context">
+    When something comes up mid-build, `/pm:detour` classifies it as minimal (fix-in-place, log it, resume) or substantial (PUSH the current epic, spin up a new one, build the interrupt). When the detour is done, `/pm:resume` POPs the stack and fires the **reconcile gate** — a fresh-context agent re-validates the paused epic against what the detour actually shipped before a single line of code is written.
+  </Step>
+</Steps>
+
+## The Detour Stack in Action
+
+Here is what a substantial interruption looks like before and after PM:
+
+**Without PM:** You're mid-build on `auth-refactor` when a prod bug comes in. You either abandon `auth-refactor` context or ignore the bug. After fixing the bug, you resume from memory — which may be wrong after a compaction.
+
+**With PM:**
+
+```text
+# A prod bug arrives while building auth-refactor
+/pm:detour "prod bug: login redirect loop on Safari"
+
+# PM PUSHes auth-refactor onto the detour stack, routes the bug to claude-code lane
+# → build the fix, commit, push
+
+/pm:resume
+
+# PM POPs auth-refactor, fires the reconcile gate:
+# A fresh reconciler agent re-reads the paused epic against what was just shipped.
+# Verdict written durably to state.json — then and only then does the build resume.
+```
+
+The reconcile gate is not a reminder — it is a hard `PreToolUse` block on `Edit`/`Write`/`NotebookEdit` until the gate clears. The agent cannot accidentally skip it.
+
+## What PM Tracks
 
 <CardGroup cols={2}>
   <Card title="Handling Detours" icon="code-branch" href="/guides/handling-detours">
@@ -41,8 +97,8 @@ PM answers all three — mechanically, not from memory.
   <Card title="External Trackers" icon="link" href="/guides/external-trackers">
     Mirror epics to Jira, Linear, or GitHub Issues without leaving Claude Code.
   </Card>
-  <Card title="Command Reference" icon="terminal" href="/commands/init">
-    Every `/pm:*` command documented with flags and examples.
+  <Card title="Daily Workflow" icon="calendar" href="/guides/daily-workflow">
+    How a full session looks from `/pm:init` to closing the last epic.
   </Card>
 </CardGroup>
 
@@ -50,21 +106,83 @@ PM answers all three — mechanically, not from memory.
 
 <CardGroup cols={3}>
   <Card title="Detour Stack" icon="layer-group">
-    PUSH/POP your working context around any interruption. The stack survives compaction.
+    PUSH/POP your working context around any interruption. The stack survives compaction and is re-injected by the SessionStart hook on every resume.
   </Card>
   <Card title="Reconcile Gate" icon="shield-check">
-    A mandatory fresh-context review fires on every resume — before you write a single line of code.
+    A mandatory fresh-context review fires on every resume — a `PreToolUse` hard block, not a suggestion. No code is written until the gate clears.
   </Card>
   <Card title="Zero Dependencies" icon="feather">
-    The engine is pure Node 18+ built-ins. Nothing to `npm install`, ever.
+    The engine is pure Node 18+ built-ins (~2,100 lines). Nothing to `npm install`, ever. 189 tests, zero external packages.
   </Card>
   <Card title="Session Briefing" icon="bolt">
-    A `SessionStart` hook re-injects the full project briefing after every context compaction.
+    A `SessionStart` hook re-injects the full project briefing after every context compaction — automatically, without any manual step.
   </Card>
   <Card title="Multi-Agent Dispatch" icon="network-wired">
-    Run parent epics as batched, worktree-isolated child agents that converge via sequential merge.
+    Run parent epics as batched, worktree-isolated child agents that converge via sequential merge. The orchestrator is the sole writer of shared state.
   </Card>
   <Card title="Tracker Mirroring" icon="arrows-rotate">
-    Instruction-layer sync to Jira, Linear, or GitHub Issues — the engine never calls external APIs.
+    Instruction-layer sync to Jira, Linear, or GitHub Issues. The engine never calls external APIs — it shapes the instructions that tell the agent to.
   </Card>
 </CardGroup>
+
+## Concepts
+
+<CardGroup cols={2}>
+  <Card title="Epics and Lanes" icon="map" href="/concepts/epics-and-lanes">
+    How work units are defined, routed through lanes, and prioritized.
+  </Card>
+  <Card title="Detour Stack" icon="layer-group" href="/concepts/detour-stack">
+    The PUSH/POP mechanism that makes any interruption safely resumable.
+  </Card>
+  <Card title="Reconcile Gate" icon="shield-check" href="/concepts/reconcile-gate">
+    The fresh-context re-validation gate that fires on every resume.
+  </Card>
+  <Card title="State and Project" icon="database" href="/concepts/state-and-project">
+    How `.conductor/state.json` and `PROJECT.md` are structured and maintained.
+  </Card>
+</CardGroup>
+
+## Command Reference
+
+<CardGroup cols={2}>
+  <Card title="/pm:init" icon="play" href="/commands/init">
+    Scaffold the conductor, register epics, write the CLAUDE.md rules block.
+  </Card>
+  <Card title="/pm:status" icon="chart-bar" href="/commands/status">
+    Show the current briefing: active epic, detour stack, priority queue, lane counts.
+  </Card>
+  <Card title="/pm:next" icon="forward" href="/commands/next">
+    Pick the next highest-priority item, respecting the detour stack and dependency links.
+  </Card>
+  <Card title="/pm:detour" icon="code-branch" href="/commands/detour">
+    Classify and handle a mid-build interruption — minimal or substantial.
+  </Card>
+  <Card title="/pm:resume" icon="rotate-right" href="/commands/resume">
+    Pop the detour stack and run the reconcile gate before resuming.
+  </Card>
+  <Card title="/pm:epic" icon="list-check" href="/commands/epic">
+    Register, update, or remove epics directly.
+  </Card>
+  <Card title="/pm:hierarchy" icon="diagram-project" href="/commands/hierarchy">
+    Plan and dispatch a parent epic's children as a multi-agent batch.
+  </Card>
+  <Card title="/pm:sync" icon="arrows-rotate" href="/commands/sync">
+    Pick up new proposals, plans, and inbound tracker issues as epics.
+  </Card>
+  <Card title="/pm:tracker" icon="link" href="/commands/tracker">
+    Configure mirroring to Jira, Linear, or GitHub Issues.
+  </Card>
+  <Card title="/pm:upgrade" icon="arrow-up" href="/commands/upgrade">
+    Refresh the CLAUDE.md rules block and run any pending migrations.
+  </Card>
+  <Card title="/pm:feedback" icon="comment" href="/commands/feedback">
+    File a bug or feature request as a GitHub issue directly from a session.
+  </Card>
+  <Card title="All Commands" icon="terminal" href="/commands/init">
+    View the full command reference including gate-guard, lane-routing, and review-mode.
+  </Card>
+</CardGroup>
+
+<Note>
+  PM is Claude Code only today. Support for Codex, Gemini CLI, Grok Build, and generic `AGENTS.md`-based platforms is tracked under `multi-platform-agent-support` in PM's own backlog.
+</Note>

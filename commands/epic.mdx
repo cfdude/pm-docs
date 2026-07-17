@@ -1,5 +1,5 @@
 ---
-title: "/pm:epic — Register and Manage Epics"
+title: "/pm:epic — Add, Update, Remove, and Manage Epics"
 sidebarTitle: "/pm:epic"
 description: "Add, update, remove, and manage epics in PM. Covers add, update-epic, remove-epic, add-many, set-active, clear-active, and set-autonomy subcommands."
 ---
@@ -21,10 +21,14 @@ conductor.mjs add-epic \
 **Flag reference:**
 
 - **`--id`** — Unique identifier in kebab-case (e.g. `auth-service-refresh`). Must be unique across all epics in the project.
+- **`--title`** — Human-readable name for the epic (quoted string).
 - **`--lane`** — One of `openspec | superpowers | claude-code | decision | external`. Routes the epic to the correct workflow.
 - **`--priority`** — One of `P0` (critical), `P1` (high), `P2` (medium), `P3` (low), or `P?` (untriaged). Determines ordering in the NEXT UP queue.
 - **`--status`** — Defaults to `queued`. Use `planned` for roadmap items you intend to do but haven't proposed or scaffolded yet — `planned` epics appear in `PROJECT.md` but are excluded from NEXT UP.
 - **`--parent`** — Nests this epic under an existing parent. The parent must already exist, an epic may not be its own parent, and the link may not form a cycle.
+- **`--external-id`** — Links the epic to an issue key in a configured external tracker (e.g. `JOB-506`). See `/pm:tracker`.
+- **`--external-url`** — Full URL to the corresponding issue in the external tracker.
+- **`--plan`** — Repo-relative path to a markdown plan file. Used as the progress source for `superpowers`-lane epics.
 - **`--link`** — Validated, not just parsed: the referenced epic id must already exist and the value must split into at least `type` and `epic`. A malformed value (typo'd id, wrong segment order) is rejected with a clear error rather than stored silently. The flag is repeatable.
 
 ## Bulk create with add-many
