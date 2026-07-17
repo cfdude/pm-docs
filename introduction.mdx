@@ -1,10 +1,11 @@
 ---
-title: "PM: Keep Claude Code Projects on Track Across Sessions"
+title: "PM Plugin: Keep Claude Code Projects on Track Across Sessions"
 sidebarTitle: "Introduction"
-description: "PM is a Claude Code plugin that tracks epics, maintains a detour stack, and enforces a reconcile gate so nothing is lost across compaction or pivots."
 ---
 
-PM is a lightweight project-management layer that sits above [OpenSpec](https://openspec.dev) and [Superpowers](https://github.com/obra/superpowers) inside Claude Code. It doesn't duplicate what those tools already do — it fills the gap above them, owning cross-epic ordering, an explicit detour stack, and the reconcile gate that ties interrupted work back to the proposal it was built against. After any context compaction, PM answers three questions in seconds: what were we working on before the detour, what work is currently outstanding, and what is the next highest-priority item to tackle.
+![Project Manager](https://raw.githubusercontent.com/cfdude/pm/refs/heads/main/img/logo.png)
+
+PM is a Claude Code plugin that tracks epics, maintains a detour stack, and enforces a reconcile gate so nothing is lost across compaction or pivots. PM is a lightweight project-management layer that sits above [OpenSpec](https://openspec.dev) and [Superpowers](https://github.com/obra/superpowers) inside Claude Code. It doesn't duplicate what those tools already do — it fills the gap above them, owning cross-epic ordering, an explicit detour stack, and the reconcile gate that ties interrupted work back to the proposal it was built against. After any context compaction, PM answers three questions in seconds: what were we working on before the detour, what work is currently outstanding, and what is the next highest-priority item to tackle.
 
 ## The problem PM solves
 
@@ -20,12 +21,15 @@ PM is built on three interlocking mechanisms. Together they make project state d
   <Card title="Epics & Lanes" icon="layers" href="/concepts/epics-and-lanes">
     Every unit of work is an epic with a lane (`openspec`, `superpowers`, `claude-code`, `decision`, `external`), a priority (P0–P3), and a lifecycle status. Epics are lane-agnostic at the conductor level — PM tracks them regardless of which tool owns execution.
   </Card>
+
   <Card title="Detour Stack" icon="arrow-turn-down-right" href="/concepts/detour-stack">
     When a mid-build interrupt arrives, PM classifies it as minimal (fix-and-resume, logged only) or substantial (PUSH the active epic, build the detour, POP and reconcile). The stack is durable in `.conductor/state.json` — it survives compaction and session restarts.
   </Card>
+
   <Card title="Reconcile Gate" icon="shield-check" href="/concepts/reconcile-gate">
     Before a paused epic can resume, a fresh-context `reconciler` agent re-validates it against what the detour actually shipped. The verdict is written durably via `record-reconcile` — not left in the transcript — and a `PreToolUse` hook hard-blocks any write while the gate is still owed.
   </Card>
+
   <Card title="Quick Start" icon="rocket" href="/quickstart">
     Install PM, run `/pm:init` in your project, and get your first status briefing in under five minutes. No `npm install`, no external dependencies.
   </Card>
@@ -36,7 +40,7 @@ PM is built on three interlocking mechanisms. Together they make project state d
 PM is not a replacement for OpenSpec or Superpowers. It sits deliberately above them and only owns what neither of those tools owns:
 
 - **OpenSpec** owns the spec-driven proposal workflow — `proposal.md`, `design.md`, `tasks.md`, gate reviews. PM tracks that an OpenSpec epic exists and its priority; it doesn't touch the spec artifacts themselves.
-- **Superpowers** owns execution discipline — brainstorming, TDD, subagent-driven development, code review. PM tracks *when* and *in what order* an epic gets built; Superpowers drives *how well* it gets built.
+- **Superpowers** owns execution discipline — brainstorming, TDD, subagent-driven development, code review. PM tracks _when_ and _in what order_ an epic gets built; Superpowers drives _how well_ it gets built.
 - **PM** owns cross-epic ordering, the detour stack, and reconcile links. Nothing else. Stories stay wherever they already live — PM doesn't move them or replace them.
 
 <Note>
@@ -48,13 +52,13 @@ PM is not a replacement for OpenSpec or Superpowers. It sits deliberately above 
 These aren't benchmarks — they're real figures pulled from PM's own `git log`, from the project that manages its own development through PM itself:
 
 | Metric | Value |
-|--------|-------|
+| --- | --- |
 | Agents dispatched through PM's multi-agent harness | **21** |
 | Releases shipped end-to-end (spec → build → test → changelog → release) | **26** |
 | Tests in the engine | **189** |
 | External dependencies | **0** |
 
-All 21 agents ran worktree-isolated and converged back through sequential merge with zero data loss and zero unresolvable conflicts. Every conflict was mechanical (a shared CHANGELOG header, a usage string) — never a real logic collision. The engine (`scripts/conductor.mjs`) is ~2,100 lines of Node 18+ built-ins only.
+All 21 agents ran worktree-isolated and converged back through sequential merge with zero data loss and zero unresolvable conflicts. Every conflict was mechanical (a shared CHANGELOG header, a usage string) — never a real logic collision. The engine (`scripts/conductor.mjs`) is ~2,100 lines of Node 18\+ built-ins only.
 
 <Tip>
   PM manages its own development — the backlog, roadmap, and every release of PM itself run through PM. The `PROJECT.md` in the `cfdude/pm` repo is a live example of what PM produces.

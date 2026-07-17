@@ -8,8 +8,9 @@
   },
   "favicon": "/favicon.svg",
   "logo": {
-    "light": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.png",
-    "dark": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.png"
+    "light": "https://raw.githubusercontent.com/cfdude/pm/refs/heads/main/img/pm-plugin-nav-logo-light.png",
+    "dark": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.png",
+    "href": "https://pm-plugin.dev"
   },
   "navbar": {
     "primary": {
