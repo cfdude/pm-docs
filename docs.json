@@ -8,8 +8,8 @@
   },
   "favicon": "/favicon.svg",
   "logo": {
-    "light": "https://media.brand.dev/b8fe5c53-d6a8-42cf-b161-88adc8e72a56.svg",
-    "dark": "https://media.brand.dev/b8fe5c53-d6a8-42cf-b161-88adc8e72a56.svg"
+    "light": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.svg",
+    "dark": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.svg"
   },
   "navbar": {
     "primary": {
