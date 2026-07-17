@@ -8,8 +8,8 @@
   },
   "favicon": "/favicon.svg",
   "logo": {
-    "light": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.svg",
-    "dark": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.svg"
+    "light": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.png",
+    "dark": "https://raw.githubusercontent.com/cfdude/pm/main/img/logo-nav.png"
   },
   "navbar": {
     "primary": {
