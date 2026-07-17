@@ -1,0 +1,80 @@
+---
+title: "Epics and Lanes: How PM Organizes Work"
+sidebarTitle: "Epics & Lanes"
+description: "Epics are PM's unit of work. Every epic is tagged with a lane that determines its workflow: openspec, superpowers, claude-code, decision, or external."
+---
+
+In PM, an epic is any discrete chunk of work — a feature, a bug fix, a spike, a decision. Every epic lives in exactly one lane, which tells PM (and you) what workflow it follows and where its stories live. The lane also determines what mechanical gates apply: which review steps are required, how stories are tracked, and whether the reconcile gate needs to run before resuming.
+
+## The five lanes
+
+<CardGroup cols={2}>
+  <Card title="openspec" icon="file-lines">
+    Spec-driven work following the proposal → design → tasks → Gate 1 → apply → Gate 2 → archive workflow. Stories live in `openspec/changes/<id>/tasks.md` checkboxes. Two gate reviews are mechanically required before archiving.
+  </Card>
+  <Card title="superpowers" icon="bolt">
+    Execution-focused work driven by a Superpowers plan (brainstorming, TDD, subagent-driven development). Stories live in the plan file referenced by the epic's `planPath` field — PM tracks when and in what order; Superpowers drives how well.
+  </Card>
+  <Card title="claude-code" icon="code">
+    Freeform Claude Code work with no external spec tool required. Stories live inline in `.conductor/state.json` under the epic's `stories[]` array. Each story has a `title` and a `done` boolean.
+  </Card>
+  <Card title="decision" icon="scale-balanced">
+    Architectural or process decisions. No stories, no task list — just a durable record that the decision was made, what was decided, and when. The epic is the artifact.
+  </Card>
+  <Card title="external" icon="arrow-up-right-from-square">
+    Work tracked in an external system (Jira ticket, GitHub issue, Linear card). PM records the `externalId` and `externalUrl`; the external system owns the stories. PM mirrors status transitions via its tracker integration.
+  </Card>
+</CardGroup>
+
+<Info>
+  Stories (checkboxes, phases, plan steps) always live in the best available external source — PM never copies them into `state.json` except for `claude-code`-lane epics using inline `stories[]`. Keeping the source of truth in OpenSpec or Superpowers is intentional: it prevents duplication and keeps PM's state file lean.
+</Info>
+
+## Epic lifecycle
+
+Every epic moves through a defined set of statuses. The normal progression is linear, but epics can be paused and unpaused by the detour stack.
+
+| Status | Meaning |
+|--------|---------|
+| `untriaged` | Just registered — no priority or lane decision made yet. Appears in the backlog but not in NEXT UP. |
+| `planned` | On the roadmap but not yet ready to queue. Excluded from NEXT UP and per-lane counts. Transitions to `untriaged` automatically when an OpenSpec change is created and `/pm:sync` runs. |
+| `queued` | Prioritized and ready to work. Eligible for `/pm:next` selection. |
+| `active` | Currently being worked. Only one epic is active at a time (set via `set-active`). |
+| `paused` | Pushed onto the detour stack. Will be restored to `active` when `/pm:resume` pops it. |
+| `archived` | Done. For `openspec`-lane epics, Gate 2 must be recorded before this transition is allowed. |
+
+## Priority
+
+PM uses four priority levels plus an unset sentinel:
+
+| Priority | Meaning |
+|----------|---------|
+| `P0` | Critical or blocking. Detours are almost always P0. `/pm:next` will always surface these first. |
+| `P1` | High priority — important work that should happen soon. |
+| `P2` | Normal priority — the default for most backlog items. |
+| `P3` | Low priority — nice to have, not blocking anything. |
+| `P?` | Not yet triaged. Set automatically on `untriaged` epics before they've been prioritized. |
+
+## Epic links
+
+Epics can be related to each other via typed links. Links are directional and recorded on both ends.
+
+| Link type | Meaning |
+|-----------|---------|
+| `blocks` | This epic must be archived before the linked epic can start. `/pm:next` skips starved epics and names the blocker. |
+| `depends-on` | A softer dependency — this epic relies on the linked epic's output but isn't hard-blocked from starting. |
+| `resolves-blocker-for` | This epic (typically a detour) exists to unblock the linked epic. Set on the detour. |
+| `may-invalidate` | The linked epic's design **may have been invalidated** by this epic's changes. Set on the parent when a detour is pushed. This is the reconcile relationship — it connects a detour to the epic it might have made stale. |
+
+The `may-invalidate` link is the most important in the system. When the detour is archived and `/pm:resume` runs, this link is what the reconciler agent reads to understand which paused proposal to re-validate. The verdict is written back durably onto this link as `{verdict, amendments, reconciledAt}`.
+
+## Hierarchy
+
+Epics can be nested under a single parent, forming a tree. Use `--parent <id>` on `/pm:epic add` (or `add-many --from <json>` for bulk creation) to nest an epic.
+
+When a parent epic has children:
+- `PROJECT.md` indents children under their parent and shows a rolled-up **`X/Y children archived`** count in the briefing.
+- NEXT UP preserves global priority order — grouping is render-only.
+- A parent epic with all children `autonomous` can be dispatched as an **unattended multi-agent batch** via `plan-hierarchy --parent <id>`, where each child runs in its own git worktree and converges back sequentially.
+
+Hierarchy validation is enforced by the engine: a parent must exist, self-loops are rejected, and cycles are rejected. `remove-epic` is blocked by default if an epic still has children — pass `--cascade` to remove the parent and all descendants together.

@@ -1,0 +1,109 @@
+---
+title: "Handle Interruptions Without Losing Your Place"
+sidebarTitle: "Handling Detours"
+description: "Use PM's detour stack to park current work, build the interrupt, and resume cleanly — with a mandatory reconcile gate that re-validates your plan first."
+---
+
+Mid-build interruptions are inevitable. PM turns them into a structured workflow: classify the interrupt, push current work onto the stack, build the detour in its own lane, then resume with a mandatory fresh-context review. The key insight is that the thing that got interrupted doesn't get to just "remember" — it gets re-validated before it resumes.
+
+## Step 1: Classify before you act
+
+This is the most important step. Before touching a single file, run `/pm:detour "<what came up>"` and let PM classify the interruption. The classification determines everything that follows.
+
+**Minimal** — small, self-contained, no design ambiguity. The fix fits before the next compaction and doesn't reshape the current proposal. Fix it, test it, commit it, log it, and resume. No proposal needed. No stack entry.
+
+**Substantial** — needs its own design, changes shared behavior, or is multi-step. This becomes its own epic in the appropriate lane. PM runs the full PUSH flow.
+
+**When uncertain, treat as substantial.** A needless stack entry is cheap to clean up. A lost thread is exactly the problem PM exists to prevent.
+
+## Minimal detour flow
+
+<Steps>
+  <Step title="Fix the issue">
+    Make the targeted change. Keep the scope narrow — if it starts growing, stop and re-classify as substantial.
+  </Step>
+  <Step title="Test and commit">
+    Run your tests and commit the fix with a clear message.
+  </Step>
+  <Step title="Log the detour">
+    Record the fix in the append-only detour trail so it leaves a durable timestamp and commit SHA:
+    ```bash
+    node "$ENGINE" log-detour "<what you fixed>"
+    ```
+    This appends a line to `.conductor/detours.log`. No proposal, no state entry — just a trail.
+  </Step>
+  <Step title="Resume">
+    Continue where you left off on the original epic. No reconcile gate is required for a minimal detour.
+  </Step>
+</Steps>
+
+## Substantial detour flow
+
+<Steps>
+  <Step title="Run /pm:detour">
+    Run `/pm:detour "<what came up>"`. PM pauses the active epic (setting its status to `paused`) and pushes a stack frame onto `.conductor/state.json`'s `detourStack`.
+  </Step>
+  <Step title="A new epic is created for the detour">
+    PM registers a new epic for the detour — `role: detour`, priority `P0` by default, in the appropriate lane for the scope of work.
+  </Step>
+  <Step title="Cross-links are recorded">
+    Two links are written automatically: the detour `resolves-blocker-for` the paused parent, and the parent `may-invalidate` the detour. These links are what the reconcile gate reads when you resume.
+  </Step>
+  <Step title="Build the detour">
+    Work through the detour epic using its lane's normal workflow — OpenSpec proposal flow, Superpowers plan, or a direct claude-code build. PM tracks it in the queue as active.
+  </Step>
+  <Step title="Archive the detour">
+    Once the detour work is done and committed, archive the detour epic through the standard path for its lane.
+  </Step>
+  <Step title="Resume with /pm:resume">
+    Run `/pm:resume`. PM pops the stack frame, restores the paused epic to active, and runs the mandatory reconcile gate before you write a single line of code.
+  </Step>
+</Steps>
+
+## Resuming after a detour
+
+`/pm:resume` is not just a pop — it is a structured re-entry with a mandatory checkpoint. The steps in order:
+
+1. **Verify** the detour epic is `archived` and its work is committed. If it's not, it's not time to resume — finish the detour first.
+2. **Pop** the top stack frame from `detourStack`. Set the paused epic's status back to `active` and update the `active` pointer.
+3. **Run the reconcile gate** — if the stack frame had `reconcileOnResume: true`, PM delegates a fresh-context review to the `reconciler` agent via the Task tool, passing the paused epic id and the detour epic id. The reconciler re-reads the paused proposal cold, diffs what the detour actually shipped, and reports back a verdict.
+4. **Write the verdict back durably** — this is what actually clears `reconcileNeeded`. The result is not just narrated in the transcript; it is attached to the paused epic's link in `.conductor/state.json` via `record-reconcile`.
+5. **State the next story** — after a valid or amended reconcile, PM tells you exactly which story to build next on the resumed epic.
+
+## What the reconcile gate checks
+
+The `reconciler` agent runs in a completely fresh context. It has no memory of the original build session. Given the paused epic id and the detour epic id, it:
+
+- Re-reads the paused proposal in full
+- Diffs what the detour actually changed against what the proposal assumed
+- Reports back with one of two verdicts:
+
+**`valid`** — the detour didn't affect the paused proposal's assumptions. Resume building as planned.
+
+**`invalidated`** — the detour changed something the paused proposal depends on. The reconciler lists specific amendments: stories to add, remove, or rewrite. Update the proposal and `tasks.md` before writing any code.
+
+Either way, the verdict plus any amendments are written back durably via `record-reconcile`, attaching `{verdict, amendments, reconciledAt}` to the paused epic's `may-invalidate` link. The judgment survives past this conversation and is visible in future briefings.
+
+## Example detour stack frame
+
+This is what a substantial detour looks like in `.conductor/state.json` while work is paused:
+
+```json
+{
+  "pausedEpic": "add-oauth-flow",
+  "pausedAt": "2024-01-15T14:23:00Z",
+  "reason": "login page throwing 500 on all POST requests",
+  "spawnedDetour": "fix-login-500",
+  "reconcileOnResume": true
+}
+```
+
+`reconcileOnResume: true` is the default whenever the detour touches code or behavior the paused epic depends on. Set it to `false` only when you are certain the detour is completely isolated.
+
+<Warning>
+  The gate guard blocks `Edit`, `Write`, and `NotebookEdit` while `reconcileNeeded: true` is set on the active epic. This is unconditional — `set-gate-guard off` does not bypass it. Run `/pm:resume` and complete the reconcile gate first before attempting to write code.
+</Warning>
+
+<Tip>
+  Use the `--minimal` flag to skip the classification prompt entirely when you already know the fix is small: `/pm:detour --minimal "fixed typo in auth header"` goes straight to the fast path — fix, test, commit, log, resume.
+</Tip>

@@ -1,0 +1,87 @@
+---
+title: "The Reconcile Gate: Safe Resumption After Detours"
+sidebarTitle: "Reconcile Gate"
+description: "The reconcile gate runs a fresh-context re-validation of your paused epic against what the detour actually shipped, before any new code is written."
+---
+
+The reconcile gate is the safety mechanism that fires every time you pop a detour. A fresh-context reconciler agent re-reads the paused epic's proposal and diffs what the detour actually changed, then delivers a verdict — `valid` or `invalidated` — before a single new line of code gets written. This is PM's answer to a real problem: the thing that got interrupted doesn't get to just "remember" what was planned. It gets re-validated, the same discipline as saving and restoring context around a hardware interrupt.
+
+## Why it exists
+
+A detour might ship changes that invalidate the design or task list of the paused epic. A bug fix might refactor the very interface your feature was building against. A shared-behavior change might make three of your queued tasks redundant — or contradictory.
+
+Resuming blindly means building on a stale plan. If the detour was substantial enough to push onto the stack (rather than handled as a minimal detour), it was substantial enough to potentially change what the paused epic needs to do. The gate catches this mechanically rather than relying on an agent to remember to check, or on a human to notice the drift before it compounds into a harder conflict later.
+
+## How it works
+
+<Steps>
+  <Step title="Resume triggers the gate">
+    `/pm:resume` pops the top detour stack frame and checks whether `reconcileOnResume` was `true`. If yes, `reconcileNeeded: true` is set on the paused epic and the gate fires before any code can be written.
+  </Step>
+  <Step title="A fresh-context reconciler agent is dispatched">
+    The `reconciler` agent is dispatched via the Task tool with the paused epic id and the detour epic id. It runs in a clean context with no prior conversation history — this is intentional, preventing any in-session assumptions from contaminating the review.
+  </Step>
+  <Step title="The reconciler reads and diffs">
+    The reconciler reads the paused epic's proposal (and `tasks.md` for `openspec`-lane epics), then diffs what the detour actually shipped. It returns a structured response:
+    - `VERDICT: valid` or `VERDICT: invalidated`
+    - `AMENDMENTS:` — one amendment per line (stories to add, remove, or change). Empty if valid.
+  </Step>
+  <Step title="The verdict is written back durably">
+    The verdict is recorded via:
+    ```bash
+    node "$ENGINE" record-reconcile <paused-id> \
+      --detour <detour-id> \
+      --verdict <valid|invalidated> \
+      --amendments "<amendment-a>;<amendment-b>;..."
+    ```
+    This attaches `{verdict, amendments, reconciledAt}` to the paused epic's `may-invalidate` link to the detour in `.conductor/state.json` (creating the link if it doesn't already exist), and clears `reconcileNeeded` in one step. The judgment survives past this conversation instead of only ever living in the transcript.
+  </Step>
+</Steps>
+
+## Verdicts and outcomes
+
+<CardGroup cols={2}>
+  <Card title="valid" icon="circle-check">
+    The detour's changes don't affect the paused epic's design or task list. The reconciler says so explicitly. State is updated and you can resume building. No amendments needed.
+  </Card>
+  <Card title="invalidated" icon="triangle-exclamation">
+    The detour shipped changes that conflict with or supersede part of the paused proposal. You must update the OpenSpec proposal and `tasks.md` (or the `stories[]` for a `claude-code`-lane epic) to reflect the amendments before writing new code.
+  </Card>
+</CardGroup>
+
+Either way, the `record-reconcile` call is required — even for a `valid` verdict. It's what actually clears `reconcileNeeded` and lifts the gate-guard block. Do not hand-clear `reconcileNeeded` directly in `state.json`.
+
+## The gate guard
+
+The gate guard is a `PreToolUse` hook that mechanically blocks `Edit`, `Write`, and `NotebookEdit` while the active epic has `reconcileNeeded: true`. It is:
+
+- **On by default** — no configuration required.
+- **Unconditional** — it fires regardless of the repo's `gateGuard` setting. `set-gate-guard off` no longer bypasses this specific check; that flag is reserved for any future generalization of the hook mechanism.
+- **The only path past it** — run the reconcile gate and call `record-reconcile`. There is no override flag.
+
+This means the gate guard is a genuine enforcement mechanism, not a reminder. An agent mid-task cannot accidentally start writing code on a stale plan because a hook blocks the write at the tool level before any edit reaches the filesystem.
+
+<Note>
+  The reconcile gate applies to all lanes whenever a detour is popped with `reconcileOnResume: true`. The OpenSpec two-gate review (Gate 1 / Gate 2) described below is a separate, additional mechanism specific to `openspec`-lane epics only.
+</Note>
+
+## OpenSpec two-gate review
+
+For `openspec`-lane epics, PM enforces two separate gate reviews across the epic's lifecycle — independent of the detour reconcile gate:
+
+| Gate | When | Purpose |
+|------|------|---------|
+| **Gate 1** | Before code is written, after the spec is drafted | Fresh-context spec review. Catches design problems before any implementation investment. |
+| **Gate 2** | After implementation, before docs/archive | Fresh-context implementation review. Required to archive. |
+
+Both gates are recorded with:
+
+```bash
+node "$ENGINE" record-gate-review <epicId> --gate 1|2 --verdict pass|fail [--reviewer "<note>"]
+```
+
+This writes `{verdict, reviewedAt, note?}` onto `epic.gateReview.gate1` or `epic.gateReview.gate2` in `state.json`. Gate 2 is mechanically enforced: `update-epic <id> --status archived` **rejects** the transition for any `openspec`-lane epic that doesn't already have a `gateReview.gate2.verdict === "pass"` recorded. Gate 1 is not itself required at archive time (it gates code, which already happened earlier), though recording it is good practice.
+
+Non-`openspec`-lane epics (`superpowers`, `claude-code`, `decision`, `external`) are completely unaffected by the two-gate check. It never runs for them.
+
+An autonomous epic still requires `record-gate-review` to be called after each real gate review — narration alone in the conversation transcript does not satisfy the archive-time check, and there is no bypass flag.

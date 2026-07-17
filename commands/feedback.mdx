@@ -1,0 +1,58 @@
+---
+title: "/pm:feedback — File a Bug or Feature Request"
+sidebarTitle: "/pm:feedback"
+description: "File a bug or feature request to the PM repo from Claude Code. Checks for near-duplicate issues first and comments on matches instead of filing duplicates."
+---
+
+`/pm:feedback` lets you file a bug report or feature request for PM itself without leaving your Claude Code session. Instead of copy-pasting context between windows, you describe the issue once and your agent posts it straight to the `cfdude/pm` GitHub repo. It searches for near-duplicate issues first — if a match exists, it comments on the existing issue rather than creating a duplicate.
+
+## Usage
+
+```bash
+/pm:feedback bug "<summary>"
+/pm:feedback feature "<summary>"
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `bug` | File a bug report against `cfdude/pm`. |
+| `feature` | File a feature request against `cfdude/pm`. |
+| `<summary>` | A concise, specific description of the issue or request. |
+
+For a bug report, include what you expected, what actually happened, the command or subcommand involved, and any error output. For a feature request, describe the concrete use case and, if you know it, which lane, command, or skill section it would touch.
+
+## Deduplication
+
+Before filing anything new, PM searches open issues on `cfdude/pm` for near-duplicates:
+
+```bash
+gh issue list --repo cfdude/pm --state open --search "<key terms from the title>"
+```
+
+If a clearly matching issue is found, your agent **comments on the existing issue** with your new details rather than creating a duplicate:
+
+```bash
+gh issue comment <number> --repo cfdude/pm \
+  --body "<new details or repro context from this session>"
+```
+
+Your agent reports the existing issue's URL back to you and stops — no new issue is created.
+
+## How it works
+
+When no duplicate exists, your agent creates a new issue:
+
+```bash
+gh issue create --repo cfdude/pm \
+  --title "<title>" \
+  --body "<description + relevant context>" \
+  --label "bug"   # or "enhancement" for feature requests
+```
+
+This is a pure agent-driven workflow. **The PM engine (`conductor.mjs`) is never involved and never calls GitHub.** All `gh` calls are made by your Claude Code agent via Bash — the same instruction-layer law that governs tracker sync, feedback filing, and every other external action in PM.
+
+`/pm:feedback` only targets `cfdude/pm`. It is not a general-purpose issue filer and should not be pointed at other repos.
+
+<Tip>
+Include as much context as you can in the summary — what you expected, what happened, and your current PM version. You can find the version in the SessionStart briefing or in `state.json` under `pmVersion`.
+</Tip>

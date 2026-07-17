@@ -1,0 +1,61 @@
+---
+title: "/pm:detour — Park Current Work for an Interruption"
+sidebarTitle: "/pm:detour"
+description: "Classify a mid-build interruption as minimal or substantial: fix-and-log it fast, or push the current epic onto the detour stack to preserve context."
+---
+
+`/pm:detour` handles mid-build interruptions without losing the thread. Pass it a description of what came up — PM classifies it, either logs a quick fix or pushes the current epic onto the detour stack, and sets up the new work in its own lane. The classification step is mandatory: do not start fixing before you know which path you're on.
+
+## Usage
+
+```bash
+/pm:detour "<what came up>"
+/pm:detour --minimal "<what you fixed>"   # fast path: skip classification
+```
+
+## Minimal detour (fast path)
+
+A minimal detour is small, self-contained, has no design ambiguity, fits before the next compaction, and doesn't reshape the current proposal. If it passes all those tests, fix it immediately — no stack entry, no new epic.
+
+The flow is: fix the issue → test → commit → record the detour so it leaves a trail:
+
+```bash
+conductor.mjs log-detour "<what you fixed>"
+```
+
+This appends a timestamped line plus the current commit SHA to `.conductor/detours.log`. Then resume the paused work as normal.
+
+If you invoke `/pm:detour --minimal "<what>"`, PM takes exactly this path and stops — no classification prompt, no push.
+
+## Substantial detour (full flow)
+
+A detour is substantial when it needs its own design, changes shared behavior, or is multi-step. It becomes its own epic in the appropriate lane and is worked through that lane's full workflow.
+
+When PM classifies a detour as substantial, it performs the following steps automatically:
+
+1. Makes the current epic's `tasks.md` reflect reality and commits so nothing is left uncommitted.
+2. Sets the current epic's `status` to `paused` in `.conductor/state.json`.
+3. Pushes a stack frame with `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume: true` (default true whenever the detour will touch code the paused epic depends on).
+4. Creates the detour as a new epic with `role: detour` at P0 by default, in the appropriate lane.
+5. Records cross-links: the detour gets a `resolves-blocker-for` link pointing to the parent; the parent gets a `may-invalidate` link pointing to the detour.
+6. Sets the detour epic as active and opens its OpenSpec proposal.
+
+**Example:** You're mid-build on `api-gateway` (openspec, P1) when you discover webhook HMAC verification is broken in production. That's substantial — it needs its own spec, and its fix will change the shared request-validation path the `api-gateway` work depends on. PM pauses `api-gateway`, pushes a stack frame, and creates `webhook-hmac-fix` (P0, role: detour), then opens a fresh proposal for it.
+
+## Honcho memory
+
+After a substantial detour push, preserve the context pivot for Honcho so it survives across repos and compactions:
+
+```bash
+conductor.mjs honcho-memory push <parent-epic-id> "<reason>"
+```
+
+This prints a formatted `paused <parent> for <reason>` memory line and appends a timestamped copy to `.conductor/honcho-memories.log`. Paste the printed line into your Honcho MCP memory tool. The engine only formats and logs the string — it never calls Honcho itself.
+
+## After the detour
+
+When the detour epic is archived and its work is committed, run `/pm:resume` to pop the stack frame and run the mandatory reconcile gate. Do not skip the gate — it is the structured re-entry that checks whether the detour's changes affect the paused plan.
+
+<Tip>
+When in doubt, treat it as substantial. A needless stack entry is cheaper than re-deriving a lost context after compaction.
+</Tip>

@@ -1,0 +1,101 @@
+---
+title: "/pm:tracker — Connect an External Issue Tracker"
+sidebarTitle: "/pm:tracker"
+description: "Mirror epics to Jira, Linear, GitHub Issues, or any tracker. PM shapes the sync instructions; your agent executes them using your existing tooling."
+---
+
+`/pm:tracker` makes PM aware of an external issue tracker. Once configured, PM shapes the sync instructions in your `CLAUDE.md` rules block — telling your Claude Code agent which epics need issues created and when to transition them. The engine itself never calls the tracker; your agent does, using whatever tooling you have (an MCP server, the GitHub CLI, a REST client).
+
+## Detection
+
+PM detects tracker signals before asking — but it is careful not to over-infer. **Hosting a repo on GitHub, GitLab, or Bitbucket is NOT a signal.** The mere presence of a remote does not mean your team manages work in that platform's issue tracker.
+
+PM treats the following as real signals that a tracker is in active use:
+
+- A connected issue-tracker MCP that is in use — `mcp__jira__*`, `mcp__linear__*`, a GitHub Issues/Projects tool, or similar.
+- Real issue-key conventions in commit or branch history — for example, `PROJ-123` or `#42`.
+- An explicit statement in `CLAUDE.md` or `README` that "we track work in &lt;X&gt;".
+
+When a signal is found, PM offers the connection as a choice — it never assumes. Saying no changes nothing about local tracking; the conductor still records every epic, status, priority, and story in `.conductor/state.json` and `PROJECT.md`.
+
+## Configuring a tracker
+
+Use the `set-tracker` subcommand to record or update tracker settings for the repo:
+
+```bash
+conductor.mjs set-tracker \
+  --system jira \
+  --instance your-company \
+  --project PROJ \
+  --mechanism mcp \
+  --intent active:in-progress \
+  --intent paused:todo \
+  --intent archived:done
+```
+
+| Flag | Description |
+|------|-------------|
+| `--system` | Any string identifying the tracker — `jira`, `linear`, `github-issues`, `gitlab`, etc. |
+| `--instance` | Your tracker's hostname or workspace slug (e.g., `your-company` for `your-company.atlassian.net`). |
+| `--project` | The project key your epics belong to, such as `PROJ` or `JOB`. |
+| `--mechanism` | How your agent calls the tracker — `mcp`, `cli`, `api`, or any other label. |
+| `--intent` | Repeatable. Maps a PM lifecycle status to a semantic tracker target (see below). |
+
+Re-running `set-tracker` merges — only the flags you pass change. The `CLAUDE.md` rules block is refreshed automatically.
+
+## `statusIntent` mapping
+
+`--intent` maps PM's lifecycle statuses to **semantic goals**, not literal workflow-transition names. Your agent resolves the actual transition using its own tooling at sync time. For example, `active:in-progress` means "when an epic is active, move its linked issue toward an in-progress state" — PM does not care whether your Jira board calls that transition "Start Progress" or "Begin".
+
+A fully configured tracker block in `state.json` looks like this:
+
+```json
+{
+  "tracker": {
+    "system": "jira",
+    "instance": "your-company",
+    "project": "PROJ",
+    "mechanism": "mcp",
+    "statusIntent": {
+      "active": "in-progress",
+      "paused": "todo",
+      "archived": "done"
+    }
+  }
+}
+```
+
+## Bidirectional mirroring (Jira, Linear, etc.)
+
+For any `--system` other than `github-issues`, the `CLAUDE.md` rules block instructs your agent to:
+
+1. **Create an issue** for any epic that lacks an `externalId`, then record the returned key:
+   ```bash
+   conductor.mjs update-epic <id> --external-id PROJ-123 --external-url https://...
+   ```
+2. **Transition the issue** toward the `statusIntent` target each time the epic's status changes — resolving the real workflow transition with your own tooling.
+3. **Link child epics** to a parent tracker epic when a hierarchy is involved.
+
+## GitHub Issues (inward-only)
+
+`--system github-issues` is a special, inward-facing shape. Instead of mirroring local epics out to GitHub Issues, it pulls open GitHub Issues **in** as new untriaged epics during `/pm:sync` — the same pattern PM uses to auto-register OpenSpec changes found on disk.
+
+```bash
+conductor.mjs set-tracker --system github-issues --repo owner/name
+```
+
+During `/pm:sync`, your agent:
+
+1. Lists open issues with `gh issue list --repo <repo> --state open --json number,title,url,labels`.
+2. Checks whether an epic already has that issue number as its `externalId` — if so, skips it.
+3. Registers new issues as epics with `--status untriaged`, using any `P0`–`P3` label as the priority (defaulting to `P2`).
+
+`github-issues` does **not** auto-create GitHub Issues for local epics. That direction is intentionally omitted to avoid silently creating public issues on your behalf.
+
+## TRACKER SYNC briefing line
+
+In the session briefing, the `TRACKER SYNC` line lists only epics with an active status that still lack an `externalId`. PM never fabricates transition state — it cannot see the tracker's current workflow position and will not guess at it.
+
+<Info>
+Tracker awareness is additive. The conductor always tracks everything locally. A tracker only adds an external mirror — saying no to a tracker prompt changes nothing about local tracking, issue counts, or epic statuses.
+</Info>

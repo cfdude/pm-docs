@@ -1,0 +1,43 @@
+---
+title: "/pm:next — Get a Concrete Work Recommendation"
+sidebarTitle: "/pm:next"
+description: "PM reads the current state and recommends exactly one thing to work on next, following the detour-stack-first, then priority-order decision rule."
+---
+
+`/pm:next` reads the current conductor state and tells you precisely what to work on. It follows a strict, deterministic decision rule so you never have to guess, names any blockers explicitly when it can't advance, and surfaces genuine ties to you rather than making an arbitrary call. The output is always a single, concrete recommendation — the epic, and the specific story or phase within it to tackle.
+
+## Decision rule
+
+PM applies the following order every time you call `/pm:next`:
+
+<Steps>
+  <Step title="Detour stack check (highest priority)">
+    If the detour stack is non-empty, the next action is always to finish or resume the **top frame**. If the detour epic is already archived, PM triggers the reconcile gate via `/pm:resume`. PM never starts new work while a detour is unresolved — the stack must be empty first.
+  </Step>
+  <Step title="Priority queue (when stack is clear)">
+    With an empty detour stack, PM selects the highest-priority `queued` epic in P0 → P3 order. If the currently active epic still has open stories, that's the default next action rather than switching epics. Any epic whose `depends-on` epic hasn't been archived yet is skipped, and the blocker is named explicitly in the output.
+  </Step>
+  <Step title="Tie-breaking and ambiguity">
+    If two or more epics share the same priority with no clear differentiator, PM surfaces the tie to you and asks you to choose rather than picking arbitrarily. Ambiguity is always made visible, never silently resolved.
+  </Step>
+</Steps>
+
+## What it does after choosing
+
+Once PM identifies the next epic, it makes that epic active through the engine CLI:
+
+```bash
+node "$ENGINE" set-active <epic-id>
+```
+
+`set-active` does three things atomically: it updates the top-level `.active` pointer in `state.json`, sets the chosen epic's `status` to `active`, and demotes any previously-active epic back to `queued`. This keeps the briefing's **NOW** line accurate without requiring you to manually update state.
+
+PM then states the specific next story or phase to build — not just the epic name, but the concrete unit of work within it.
+
+```text
+Next: auth-overhaul — Story 4: Implement refresh-token rotation endpoint.
+```
+
+<Tip>
+  If you're at the start of a session and the detour stack is non-empty, `/pm:next` will tell you to resume the top frame before starting anything new. This is intentional — PM enforces the detour-stack-first rule unconditionally. Clear the detour (via `/pm:resume`) before asking for the next queued epic.
+</Tip>

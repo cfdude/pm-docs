@@ -1,0 +1,124 @@
+---
+title: "/pm:epic — Register and Manage Epics"
+sidebarTitle: "/pm:epic"
+description: "Add, update, remove, and manage epics in PM. Covers add, update-epic, remove-epic, add-many, set-active, clear-active, and set-autonomy subcommands."
+---
+
+`/pm:epic` is PM's primary interface for registering and modifying epics. Use it to add new work items in any lane, update their status and links, manage parent–child hierarchy, and grant execution autonomy for unattended agents. Every write operation is validated up front — unknown ids, malformed links, and cycle-forming parent assignments are all rejected with a clear error rather than silently stored.
+
+## Adding an epic
+
+Register a new epic with the `add` subcommand. Only `--id`, `--title`, `--lane`, and `--priority` are required; all other flags are optional.
+
+```bash
+conductor.mjs add-epic \
+  --id <id> --title "<title>" --lane <lane> --priority <P0-P3> \
+  [--status <status>] [--parent <parent-id>] \
+  [--external-id <KEY>] [--external-url <url>] \
+  [--plan <path>] [--link "<type>:<epic>[:<reason>]"]
+```
+
+**Flag reference:**
+
+- **`--id`** — Unique identifier in kebab-case (e.g. `auth-service-refresh`). Must be unique across all epics in the project.
+- **`--lane`** — One of `openspec | superpowers | claude-code | decision | external`. Routes the epic to the correct workflow.
+- **`--priority`** — One of `P0` (critical), `P1` (high), `P2` (medium), `P3` (low), or `P?` (untriaged). Determines ordering in the NEXT UP queue.
+- **`--status`** — Defaults to `queued`. Use `planned` for roadmap items you intend to do but haven't proposed or scaffolded yet — `planned` epics appear in `PROJECT.md` but are excluded from NEXT UP.
+- **`--parent`** — Nests this epic under an existing parent. The parent must already exist, an epic may not be its own parent, and the link may not form a cycle.
+- **`--link`** — Validated, not just parsed: the referenced epic id must already exist and the value must split into at least `type` and `epic`. A malformed value (typo'd id, wrong segment order) is rejected with a clear error rather than stored silently. The flag is repeatable.
+
+## Bulk create with add-many
+
+To register a parent epic and its children in one atomic operation — for example, a sprint and its child tickets — author a JSON batch file and pass it with `--from`:
+
+```json
+{
+  "parent": {
+    "id": "sprint-q1",
+    "title": "Q1 Sprint",
+    "lane": "external",
+    "priority": "P0",
+    "status": "queued"
+  },
+  "epics": [
+    { "id": "task-001", "title": "Auth service", "lane": "openspec", "priority": "P0" },
+    { "id": "task-002", "title": "API gateway", "lane": "openspec", "priority": "P1" }
+  ]
+}
+```
+
+```bash
+conductor.mjs add-many --from /path/to/batch.json
+```
+
+When a `parent` key is present, it is created first and each entry in `epics[]` defaults its `parent` field to it. The operation is **atomic**: every entry is validated up front — id format, uniqueness against existing epics and within the batch itself, lane, status, and parent refs/cycles. On any failure, nothing is written and the command exits non-zero naming the offender. A valid batch is persisted in a single write, so there is no partial-state race. Pass `--from -` to read the batch from stdin. The `parent` key is optional; a bare `{ "epics": [...] }` batch also works.
+
+## Updating an epic
+
+Change any field on an existing epic with `update-epic`. The id is positional.
+
+```bash
+conductor.mjs update-epic <id> \
+  [--title <title>] [--status <status>] [--priority <P?>] \
+  [--parent <id>] [--external-id <KEY>] [--external-url <url>] \
+  [--link "<type>:<epic>[:<reason>]"] [--review-mode off|standard|thorough]
+```
+
+All validations from `add-epic` apply: no self-parent, no cycles, known status values, and referenced epic ids must exist. On an unknown id or any invalid flag value, the command exits non-zero and writes nothing.
+
+**`--link` replaces the epic's links wholesale** — unlike the other flags, which patch a single field, passing `--link` discards all existing links and stores only the ones you provide in this call. This is the intended path for fixing a malformed link without touching `state.json` directly. Pass every link you want the epic to have; omitting `--link` entirely leaves existing links untouched.
+
+**`--review-mode`** can escalate a single epic above the repo's bounded review dial (`off → standard → thorough`), but never de-escalate below it.
+
+## Removing an epic
+
+Hard-delete an epic with `remove-epic`. The only prior recovery path was a raw `git checkout` on `state.json`; this command replaces that workaround.
+
+```bash
+conductor.mjs remove-epic <id> [--cascade]
+```
+
+- **Blocked by default** if the epic has any descendants. The command prints a `(id, title, lane, priority, status)` table of the parent and every descendant at any depth, then exits non-zero. Reassign or remove the descendants first, or use `--cascade`.
+- **`--cascade`** removes the epic and all its descendants together in one atomic write. The preview table from the blocked attempt and the `--cascade` blast radius always agree — confirming from that table is confirming the real deletion set.
+- **Dangling links are cleaned up automatically.** Any other epic's `links[]` entries that reference the removed id are stripped, and the command reports which epics were affected.
+- If the removed epic was the active epic, the `.active` pointer is cleared automatically.
+
+<Warning>
+`remove-epic` is a hard delete — recoverable only via `git history`. Before using `--cascade`, review the blast-radius table that the blocked attempt prints and confirm explicitly. The engine has no interactive prompt; that confirmation step is your responsibility.
+</Warning>
+
+## Setting the active epic
+
+The top-level `.active` pointer (what the briefing's "NOW" line reads) has dedicated verbs. Never hand-edit `state.json` for this.
+
+```bash
+conductor.mjs set-active <id>   # sets .active and status: active; demotes previous
+conductor.mjs clear-active      # clears the active pointer
+```
+
+`set-active` sets `.active = <id>` and the epic's `status: "active"` together, demoting any previously-active epic to `queued` — so the pointer and status can never disagree. It rejects an unknown or archived id. `update-epic <id> --status active` keeps them in sync too, and moving the active epic off `active` clears the pointer automatically.
+
+## Granting autonomy
+
+Before an epic can run unattended through phase transitions and destructive actions, it needs a preflight scan and your recorded answers. Use `set-autonomy` to capture the results.
+
+```bash
+conductor.mjs set-autonomy <id> \
+  --level autonomous \
+  --preauthorize "drop-scratch-table:safe to drop" \
+  --preauthorize "category:filesystem:routine file writes" \
+  --context "staging DB only, no prod access"
+```
+
+**Flag reference:**
+
+- **`--level autonomous`** — Enables unattended execution. The default is `off` (today's behavior, unchanged). Pass this only after all preflight questions are answered and recorded.
+- **`--preauthorize`** — Pre-approves a specific action (e.g. `"drop-scratch-table:reason"`) or an entire category (`"category:<name>:<reason>"`). Valid category names are `filesystem`, `network`, `schema`, and `external-api`. Any category name outside this list is rejected, so a typo fails loudly. The flag is repeatable.
+- **`--context`** — Records a piece of background supplied during the preflight scan. Repeatable.
+- **`--notify`** — Records a WARN-class decision durably alongside the autonomy grant. Repeatable.
+
+All of `--preauthorize`, `--context`, and `--notify` are **additive** — re-running `set-autonomy` on the same epic appends to the existing entries and never clobbers them. Only `--level` replaces.
+
+<Note>
+`update-epic --status archived` on an `openspec`-lane epic requires a passing Gate 2 verdict already recorded via `record-gate-review`. If the verdict is missing or `fail`, the transition is rejected with a clear error naming what's missing. Non-openspec epics are unaffected by this check.
+</Note>

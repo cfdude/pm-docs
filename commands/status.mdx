@@ -1,0 +1,63 @@
+---
+title: "/pm:status — View the Current Project Briefing"
+sidebarTitle: "/pm:status"
+description: "Re-render PROJECT.md from state.json and display the full conductor briefing: active epic, detour stack, next-up queue, lane counts, and tracker sync."
+---
+
+`/pm:status` re-renders `PROJECT.md` from the current state and summarizes the project's position: what's actively being built, what's paused and why, what's queued next, and how many epics exist per lane. It's the fastest way to re-orient yourself at the start of a session or after any state-changing operation.
+
+## What the briefing shows
+
+<CardGroup cols={2}>
+  <Card title="NOW" icon="circle-play">
+    The active epic with its lane icon, priority badge, and live story progress derived from checkbox counts in the epic's `tasks.md` file. If no epic is active, this section prompts you to triage.
+  </Card>
+  <Card title="DETOUR STACK" icon="layer-group">
+    All paused epics in LIFO order, each annotated with the reason it was pushed onto the stack. Any frame with a pending reconcile-on-resume gate is flagged with ⚠ to remind you to reconcile before resuming.
+  </Card>
+  <Card title="NEXT UP" icon="list-ol">
+    The top-priority `queued` epics in P0 → P3 order. Blocked epics appear in this list but name their blocker explicitly — the dependency is surfaced rather than silently hidden.
+  </Card>
+  <Card title="LANE COUNTS" icon="chart-bar">
+    A snapshot of how many epics exist across each lane (`openspec`, `superpowers`, `claude-code`, `decision`, `external`) broken down by status, so you can see the overall shape of the backlog at a glance.
+  </Card>
+  <Card title="TRACKER SYNC" icon="arrows-rotate">
+    When an external tracker is configured, this section lists any currently active epics that are missing an `externalId`. These are candidates for `/pm:sync` or manual tracker linkage.
+  </Card>
+</CardGroup>
+
+## When to run it
+
+Run `/pm:status` at the **start of every session** to confirm where you left off, after `/pm:resume` to verify the detour stack contracted correctly, after `/pm:sync` to see newly registered epics, and any time you want to re-orient mid-session. The `SessionStart` hook fires it automatically when Claude Code opens your project — running it manually just forces a fresh render at any point you choose.
+
+Story progress counts come from each epic's `openspec/changes/<id>/tasks.md` checkboxes in real time. If the counts look stale, the `tasks.md` file is the source of truth — `/pm:status` will recount on the next render.
+
+## Sample PROJECT.md output
+
+```text
+╔══════════════════════════════════════════════════════════╗
+║                    PROJECT BRIEFING                      ║
+╚══════════════════════════════════════════════════════════╝
+
+NOW
+  ◆ [P1] auth-overhaul   openspec   3 / 7 stories complete
+      "Implement OAuth 2.0 refresh-token rotation"
+
+DETOUR STACK
+  ▲  [P2] hotfix-rate-limit   claude-code   ⚠ reconcile pending
+       reason: "Urgent rate-limit regression in prod"
+
+NEXT UP
+  1. [P0] payments-v2       queued   superpowers
+  2. [P1] dashboard-search  queued   openspec
+  3. [P2] export-api        queued   openspec
+       blocked-by: payments-v2
+
+LANE COUNTS
+  openspec     4 epics   (1 active, 2 queued, 1 later)
+  superpowers  1 epic    (1 queued)
+  claude-code  1 epic    (1 detour)
+
+TRACKER SYNC
+  ◆ auth-overhaul — no externalId (consider /pm:sync)
+```

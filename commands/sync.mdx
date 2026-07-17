@@ -1,0 +1,33 @@
+---
+title: "/pm:sync — Register New Proposals and Plans"
+sidebarTitle: "/pm:sync"
+description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issues not yet tracked as epics and register them. Deduplicates automatically."
+---
+
+`/pm:sync` scans your project for work that should be tracked as epics but isn't yet. It picks up new OpenSpec proposals and Superpowers plans found on disk, and — when a `github-issues` tracker is configured — pulls open GitHub Issues in as untriaged epics. After sync completes, PM prompts you to triage any newly registered epics: assign priorities, set statuses, and add any dependency links.
+
+## What it registers
+
+<CardGroup cols={3}>
+  <Card title="OpenSpec proposals" icon="file-circle-plus">
+    Any `openspec/changes/<id>/` directory not yet tracked becomes an `openspec`-lane epic registered with `status: untriaged` and `priority: P?`.
+  </Card>
+  <Card title="Superpowers plans" icon="bolt">
+    Any Superpowers plan file not yet tracked becomes a `superpowers`-lane epic registered with `status: untriaged` and `priority: P?`.
+  </Card>
+  <Card title="GitHub Issues" icon="github">
+    When a `github-issues` tracker is configured, open issues without a matching `externalId` become `claude-code`-lane epics. Default priority is `P2`; a `P0`, `P1`, `P2`, or `P3` label on the issue overrides the default.
+  </Card>
+</CardGroup>
+
+## Deduplication
+
+Sync never creates duplicate epics. For OpenSpec and Superpowers sources, deduplication is by the epic's id — if an epic with that id already exists in `state.json`, the candidate is skipped silently. For GitHub Issues, deduplication is by `externalId` (the issue number): if any existing epic already carries that `externalId`, the issue is not re-registered. Re-running `/pm:sync` as many times as you like is always safe.
+
+## When to run it
+
+Run `/pm:sync` after **pulling changes from another branch** that may have introduced new OpenSpec proposals, after **generating new proposals** in the current session, at the **start of a session** when you know new work was filed in your issue tracker since you last worked, or any time you suspect the epic index is out of date relative to disk.
+
+<Note>
+  For `github-issues` sync, the PM engine itself never calls `gh` — it only scans local files. The CLAUDE.md rules block instructs your Claude Code agent to run `gh issue list`, check each result against existing `externalId` values in `state.json`, and call `add-epic --status untriaged --external-id <n> --external-url <url> --lane claude-code --priority P2` for any new issues. The label-driven priority override (`P0`–`P3` labels) is applied at this step. Configure your GitHub tracker via `/pm:tracker` before expecting issue sync to work.
+</Note>

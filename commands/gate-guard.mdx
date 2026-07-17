@@ -1,0 +1,43 @@
+---
+title: "/pm:gate-guard — Inspect the Reconcile Gate Guard"
+sidebarTitle: "/pm:gate-guard"
+description: "A PreToolUse hook that blocks writes while the active epic owes a reconcile. Always on for that case — running set-gate-guard off will not bypass it."
+---
+
+The gate guard is PM's safety mechanism for the highest-stakes skip: writing source code before a reconcile gate has run. It is a `PreToolUse` hook that intercepts every `Edit`, `Write`, and `NotebookEdit` call and blocks them while the active epic has `reconcileNeeded: true`. This is the one place PM tolerates mechanical blocking over pure instruction — protecting you from overwriting work before a detour is properly reconciled.
+
+## How it works
+
+Every `Edit`, `Write`, and `NotebookEdit` call is intercepted by the hook. Before allowing the tool call to proceed, PM checks whether the currently active epic has `reconcileNeeded: true` — meaning the epic popped out of a detour and still owes a reconcile gate.
+
+- If `reconcileNeeded` is `true`: the tool call is **blocked** with a message directing you to run the reconciler agent via `/pm:resume`.
+- If `reconcileNeeded` is `false` or absent: the tool call proceeds normally. Epics with no pending reconcile are completely unaffected.
+
+## Always on for reconcile-owed epics
+
+As of the `gate-guard-default-on-reconcile` change, this check is **always active** for any epic carrying `reconcileNeeded: true` — including epics that already had the flag before this change was introduced. It previously required an explicit `set-gate-guard on`; real-usage feedback showed that opt-in was never turned on across several sessions where it would have caught a real skip, so the default was flipped.
+
+**There is no bypass for this case.** Running `set-gate-guard off` does **not** silence the reconcile-owed block. The only path through it is completing the reconcile gate: run `/pm:resume`, delegate to the reconciler agent per the POP protocol, and let the reconcile gate clear `reconcileNeeded`. Once cleared, file writes proceed as normal.
+
+## The `set-gate-guard` command
+
+The command still exists and toggles the repo-level `gateGuard` flag in `state.json`:
+
+```bash
+conductor.mjs set-gate-guard on
+conductor.mjs set-gate-guard off
+```
+
+This flag is reserved for any future generalization of the hook to additional checks beyond the reconcile-owed case. It has **no effect** on the reconcile-owed block described above.
+
+## Checking gate guard status
+
+Run `/pm:gate-guard` at any time to inspect the current state of the hook — whether `gateGuard` is on or off in `state.json`, and whether any epic currently carries `reconcileNeeded: true`. This is the fastest way to understand why a write was blocked without digging into `state.json` directly.
+
+<Warning>
+If you see "blocked by gate guard" on an `Edit` or `Write` call, the only resolution is to run `/pm:resume` and complete the reconcile gate. There is no workaround — `set-gate-guard off` will not help here.
+</Warning>
+
+<Note>
+The gate guard hook is dormant until `/pm:init` has been run in a project. It activates only in projects that have been initialized and have a `.conductor/state.json` present.
+</Note>

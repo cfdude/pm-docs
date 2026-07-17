@@ -1,0 +1,104 @@
+---
+title: "Mirror Epics to Jira, Linear, or GitHub Issues"
+sidebarTitle: "External Trackers"
+description: "Configure PM to mirror epics to an external issue tracker. PM shapes the instructions; your agent executes them with whatever tooling the project uses."
+---
+
+PM can make your project aware that its epics mirror to an external issue tracker — Jira, Linear, GitHub Issues, or any other system. The engine never calls the tracker directly; it shapes instructions that your Claude Code agent executes using MCP servers, the GitHub CLI, or whatever tooling you have configured. Tracker awareness is optional and additive — PM already tracks everything locally in `.conductor/state.json` and `PROJECT.md` whether or not a tracker is configured.
+
+## Instruction-layer philosophy
+
+PM is an instruction layer, not an integration layer. This is a deliberate architectural choice with a practical consequence: it works with any tracker regardless of how you connect to it.
+
+The engine never opens a network connection to an external system. It never calls a Jira API, fires a Linear mutation, or runs `gh issue create` itself. Instead, it writes rules into your `CLAUDE.md` and surfaces sync obligations in the session briefing. You — the interactive agent — act on those instructions using whatever tooling your project has: a Jira or Linear MCP server, the GitHub CLI, an Atlassian REST connector, a Python library. The tracker doesn't need special PM support. Any system works.
+
+## Configuring a tracker
+
+<Steps>
+  <Step title="Run /pm:tracker">
+    PM scans your project for tracker signals — connected MCP servers (`mcp__jira__*`, `mcp__linear__*`, GitHub issue tools), issue-key conventions in commit or branch history (e.g. `PROJ-123`, `#142`), or explicit statements in `CLAUDE.md` or `README` that "we track work in X". Hosting a repo on GitHub is NOT a signal by itself — PM only infers tracker intent from real evidence that work is actively managed there.
+  </Step>
+  <Step title="Confirm the system and project key">
+    PM presents what it detected and asks you to confirm or correct. You specify the `system` (e.g. `jira`, `linear`, `github-issues`), `projectKey` (e.g. `PROJ`), `instance`, and `mechanism` (e.g. `mcp` or `cli`). If you don't want to connect a tracker, declining changes nothing — PM continues tracking everything locally.
+  </Step>
+  <Step title="Map PM lifecycle statuses to semantic tracker targets">
+    Define `statusIntent` — a mapping from PM's lifecycle statuses to semantic descriptions of where a tracker issue should land. These are semantic targets, not literal workflow transition names. Your agent resolves the actual transition using its own knowledge of the tracker's workflow.
+  </Step>
+  <Step title="PM records the tracker block and updates CLAUDE.md">
+    PM calls `set-tracker` to write the tracker configuration into `.conductor/state.json` and refreshes the managed rules block in `CLAUDE.md` with an "External tracker sync" section. The `TRACKER SYNC` line appears in the session briefing from this point on.
+  </Step>
+</Steps>
+
+## Tracker configuration shape
+
+A fully configured tracker block in `.conductor/state.json` looks like this:
+
+```jsonc
+"tracker": {
+  "system": "jira",
+  "instance": "your-company",
+  "projectKey": "PROJ",
+  "mechanism": "mcp",
+  "statusIntent": {
+    "untriaged": "backlog",
+    "queued": "todo",
+    "active": "in-progress",
+    "paused": "todo",
+    "planned": "backlog",
+    "archived": "done"
+  }
+}
+```
+
+`statusIntent` maps PM's lifecycle to a *semantic* target — for example, `"active": "in-progress"` — never a literal tracker workflow transition name like `"Start Progress"`. Your agent resolves the real transition when it executes the sync instruction.
+
+## Bidirectional mirroring (Jira, Linear, and others)
+
+For `jira`, `linear`, and any other non-`github-issues` system, the CLAUDE.md rules block tells your agent to:
+
+- **Create a tracker issue** for any epic that lacks an `externalId`, then record the returned key: `update-epic <id> --external-id <KEY> --external-url <url>`
+- **Transition the linked issue** toward the `statusIntent` semantic target on each status change
+- **Link parent and child tracker issues** for parent epics that have children
+
+The `TRACKER SYNC` line in the session briefing lists every active-work epic that still needs an issue created — it only reports honestly computable drift (epics missing `externalId`). It never fabricates transition state the engine cannot actually see.
+
+An epic that has been mirrored looks like this:
+
+```json
+{
+  "id": "proj-504",
+  "title": "[PROJ-504] Add OAuth flow",
+  "status": "active",
+  "lane": "external",
+  "externalId": "PROJ-504",
+  "externalUrl": "https://your-company.atlassian.net/browse/PROJ-504"
+}
+```
+
+## GitHub Issues (inward-only sync)
+
+`github-issues` is deliberately asymmetric. It pulls open issues **in** as untriaged epics — it does **not** auto-file GitHub issues for local epics.
+
+The reasoning is intentional: silently creating a public GitHub issue for every unmirrored claude-code epic is a materially bigger and more consequential default than mirroring toward an internal Jira or Linear instance. The outward instruction is suppressed specifically for `github-issues`, while Jira and Linear keep full bidirectional behavior unchanged.
+
+Configure it with a `--repo`:
+
+```bash
+node "$ENGINE" set-tracker --system github-issues --repo owner/repo
+```
+
+Once set, the CLAUDE.md rules block gains a "GitHub issue sync" section. During `/pm:sync`, your agent runs:
+
+1. `gh issue list --repo <repo> --state open --json number,title,url,labels`
+2. For each issue, check whether an epic already has that issue number as its `externalId` — if so, skip it. Re-running sync must never create a duplicate epic for the same issue.
+3. Register new issues: `add-epic --status untriaged --external-id <number> --external-url <url> --lane claude-code --priority P2` — unless the issue carries a `P0`/`P1`/`P2`/`P3` label, in which case use that priority instead.
+
+## What the TRACKER SYNC briefing line means
+
+The briefing's `TRACKER SYNC` section lists only epics where the engine can honestly compute drift — specifically, active-work epics that have no `externalId` recorded. It never guesses at transition state, and it never reports an issue as "needing a status update" based on anything the engine cannot directly see in `.conductor/state.json`.
+
+Status transition sync is your responsibility at the moment of each status change. The engine cannot observe the tracker's state from the outside.
+
+<Info>
+  Hosting a repository on GitHub is NOT a tracker signal. PM only configures tracker awareness when there is real evidence you are actively managing work in an issue tracker — a connected MCP server, issue-key conventions in commit history, or an explicit statement in `CLAUDE.md` or `README`. If the evidence isn't there, PM will not suggest a tracker configuration.
+</Info>

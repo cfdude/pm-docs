@@ -1,0 +1,93 @@
+---
+title: "Install PM in Claude Code"
+sidebarTitle: "Installation"
+description: "Install the PM project-management plugin from the cfdude-plugins marketplace. Requires Node 18+ and Claude Code. No npm install needed."
+---
+
+PM is distributed via the `cfdude-plugins` marketplace and requires no `npm install` — the engine is zero-dependency by hard rule. The entire conductor (`scripts/conductor.mjs`) is ~2,100 lines of Node 18+ built-ins, so there is nothing to install beyond the plugin itself. Add the marketplace, install the plugin, and you're ready to initialize your first project.
+
+## Prerequisites
+
+<Info>
+  **Node 18+** is required to run the conductor engine. If you're already using OpenSpec or Superpowers, Node 18+ is almost certainly present. **Claude Code** is the only supported platform today — Codex, Gemini CLI, and other platforms are on the roadmap.
+</Info>
+
+## Installation steps
+
+<Steps>
+  <Step title="Add the cfdude-plugins marketplace">
+    Register the `cfdude-plugins` marketplace with Claude Code so PM is discoverable:
+
+    ```bash
+    /plugin marketplace add cfdude/cfdude-plugins
+    ```
+  </Step>
+  <Step title="Install PM">
+    Install the `pm` plugin from the marketplace you just added:
+
+    ```bash
+    /plugin install pm@cfdude-plugins
+    ```
+  </Step>
+  <Step title="Reload plugins">
+    Reload the Claude Code plugin runtime so the new plugin and its hooks are active:
+
+    ```bash
+    /reload-plugins
+    ```
+  </Step>
+  <Step title="Initialize PM in your project">
+    Navigate to your project directory and run the init command. This scaffolds the conductor state, registers any existing epics, and writes the managed rules block into `CLAUDE.md`:
+
+    ```bash
+    cd your-project
+    /pm:init
+    ```
+
+    See the [Quick Start guide](/quickstart) for a full walk-through of what `/pm:init` creates and the triage flow that follows.
+  </Step>
+</Steps>
+
+## Companion plugins (optional)
+
+PM works completely standalone — install it, run `/pm:init`, and you immediately have cross-epic priority ordering, an explicit detour stack, and the reconcile gate with no other plugin required. That said, PM was designed to sit above three companions, and each one adds a distinct layer that PM deliberately doesn't own itself.
+
+<CardGroup cols={2}>
+  <Card title="OpenSpec" icon="file-lines" href="https://openspec.dev">
+    **Spec-driven proposal workflow.** OpenSpec owns the `proposal.md` / `design.md` / `tasks.md` artifacts and the two-gate review process. PM tracks the epic; OpenSpec owns what gets built and its durable spec record.
+
+    ```bash
+    npm install -g @fission-ai/openspec
+    cd your-project && openspec init
+    ```
+  </Card>
+  <Card title="Superpowers" icon="bolt" href="https://github.com/obra/superpowers">
+    **Execution discipline.** Superpowers drives brainstorming, TDD, subagent-driven development, and code review. PM tracks *when* and *in what order* an epic gets built; Superpowers drives *how well*.
+
+    ```bash
+    /plugin marketplace add anthropics/claude-plugins-official
+    /plugin install superpowers@claude-plugins-official
+    ```
+  </Card>
+  <Card title="Honcho" icon="brain" href="https://docs.honcho.dev">
+    **Durable memory across sessions and repos.** PM's detour stack is the live working set for one project; Honcho is where a PUSH/POP memory line goes so the relationship between projects — and between sessions — survives a compaction, a new machine, or a week away. See [docs.honcho.dev](https://docs.honcho.dev) for setup.
+  </Card>
+  <Card title="PM (standalone)" icon="check-circle">
+    **No companions required.** PM installs and initializes on its own. Each companion adds a layer PM intentionally doesn't own — but skipping them loses nothing from PM's core: priority ordering, the detour stack, and the reconcile gate all work without them.
+  </Card>
+</CardGroup>
+
+## Upgrading
+
+When PM releases a new version, the `SessionStart` briefing will tell you that a reload and upgrade are needed. The process is always the same two steps:
+
+```bash
+/reload-plugins
+/pm:upgrade
+```
+
+`/pm:upgrade` refreshes the `CLAUDE.md` rules block, runs any pending state migrations, re-renders `PROJECT.md`, and stamps the new `pmVersion` onto `.conductor/state.json`. It is idempotent — safe to run more than once.
+
+<Warning>
+  Always run `/reload-plugins` **before** `/pm:upgrade` whenever you've updated the plugin itself (not just a project init). Running `/pm:upgrade` against a stale plugin cache can apply the wrong migration. The `SessionStart` briefing explicitly tells you when a reload is needed — watch for it at the start of your session.
+</Warning>

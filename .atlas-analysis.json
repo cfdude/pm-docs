@@ -1,0 +1,113 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "PM — Project Manager for Claude Code",
+  "projectDescription": "A lightweight Claude Code plugin that tracks epics, maintains an explicit detour stack, and enforces a reconcile gate so nothing is lost across context compaction or mid-session pivots.",
+  "theme": "luma",
+  "primaryColor": "#dcdccc",
+  "lightColor": "#ffffff",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/epics-and-lanes",
+              "concepts/detour-stack",
+              "concepts/reconcile-gate",
+              "concepts/state-and-project"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/daily-workflow",
+              "guides/handling-detours",
+              "guides/multi-agent-hierarchy",
+              "guides/external-trackers",
+              "guides/companion-plugins"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Commands",
+        "groups": [
+          {
+            "group": "Session Commands",
+            "pages": [
+              "commands/init",
+              "commands/status",
+              "commands/next",
+              "commands/sync",
+              "commands/upgrade"
+            ]
+          },
+          {
+            "group": "Epic Management",
+            "pages": [
+              "commands/epic",
+              "commands/detour",
+              "commands/resume",
+              "commands/hierarchy"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "commands/tracker",
+              "commands/review-mode",
+              "commands/lane-routing",
+              "commands/gate-guard",
+              "commands/feedback"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Cross-epic priority ordering and status tracking in .conductor/state.json",
+    "Explicit detour stack — PUSH/POP with mandatory reconcile gate on resume",
+    "SessionStart hook injects a project briefing after every context compaction",
+    "Multi-agent hierarchy dispatch: worktree-isolated children converge via sequential merge",
+    "Gate Guard (PreToolUse hook) blocks writes while a reconcile is still owed",
+    "External tracker mirroring to Jira, Linear, or GitHub Issues via instruction-layer only",
+    "Lane-based routing: openspec, superpowers, claude-code, decision, external",
+    "Zero npm dependencies — pure Node 18+ built-ins engine (conductor.mjs)",
+    "Per-epic autonomy grants with preflight scan and category-based preauthorization",
+    "OpenSpec two-gate review enforcement (Gate 1 spec review, Gate 2 implementation review)"
+  ],
+  "publicApiSurface": [
+    "/pm:init",
+    "/pm:status",
+    "/pm:next",
+    "/pm:detour [--minimal \"<what>\"]",
+    "/pm:resume",
+    "/pm:sync",
+    "/pm:epic add / update-epic / remove-epic / add-many / set-active / clear-active",
+    "/pm:hierarchy (plan-hierarchy --parent <id>)",
+    "/pm:tracker (set-tracker --system ...)",
+    "/pm:review-mode (set-review-mode off|standard|thorough)",
+    "/pm:lane-routing (set-lane-routing / suggest-lane)",
+    "/pm:gate-guard (set-gate-guard on|off)",
+    "/pm:feedback [bug|feature] \"<summary>\"",
+    "/pm:changelog",
+    "/pm:upgrade",
+    "conductor.mjs set-autonomy <id> --level autonomous",
+    "conductor.mjs record-reconcile <id> --detour <id> --verdict valid|invalidated",
+    "conductor.mjs record-gate-review <id> --gate 1|2 --verdict pass|fail",
+    "conductor.mjs log-detour \"<what>\"",
+    "conductor.mjs honcho-memory push|pop <id> \"<reason>\""
+  ]
+}

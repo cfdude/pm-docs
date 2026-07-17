@@ -1,0 +1,62 @@
+---
+title: "/pm:lane-routing — Customize Lane Assignment Rules"
+sidebarTitle: "/pm:lane-routing"
+description: "Define keyword or glob rules that override PM's lane heuristic — so 'billing always goes through openspec' becomes a durable rule, not a one-time note."
+---
+
+By default, PM uses a generic heuristic to assign a lane when you add an epic — routing by estimated effort, scope, and change type. `/pm:lane-routing` lets you define per-repo rules on top of that heuristic: keyword or glob patterns that are checked first, before the generic logic runs. When a pattern matches, the lane it specifies wins. Most repos never need this, but it becomes invaluable when your project has standing conventions the generic heuristic can't know about.
+
+## Managing routing rules
+
+Use `set-lane-routing` with `--add`, `--remove`, or `--clear` to manage the overrides list:
+
+```bash
+# Add a single routing rule
+conductor.mjs set-lane-routing --add "billing:openspec"
+
+# Add a glob rule
+conductor.mjs set-lane-routing --add "hotfix-*:claude-code"
+
+# Add multiple rules at once
+conductor.mjs set-lane-routing --add "billing:openspec" --add "infra:decision"
+
+# Remove a specific rule by its match string
+conductor.mjs set-lane-routing --remove "billing"
+
+# Clear all rules
+conductor.mjs set-lane-routing --clear
+```
+
+Each rule uses the format `"<match>:<lane>"`:
+
+- `<match>` is either a plain, case-insensitive substring (`hotfix` matches "urgent hotfix for prod") or a `*`-glob (`billing-*` matches "billing-refund-flow").
+- `<lane>` must be one of `openspec`, `superpowers`, `claude-code`, `decision`, or `external`.
+- Adding a rule with the same `<match>` as an existing rule **replaces** the earlier rule.
+- `--clear` and `--remove` are applied before `--add` when combined in a single invocation.
+- Rules are checked **in the order they were added**; the first match wins.
+
+Re-running `set-lane-routing` merges — only what you pass changes.
+
+## Looking up a lane suggestion
+
+Before assigning a lane to a new epic, your agent should call `suggest-lane` with the epic title. If a rule matches, it returns the lane and the matched pattern; if nothing matches, it returns `null` and the generic heuristic applies as normal.
+
+```bash
+conductor.mjs suggest-lane "hotfix: fix broken login button"
+# {"lane":"claude-code","matched":"hotfix"}
+
+conductor.mjs suggest-lane "add a brand-new subsystem"
+# {"lane":null,"matched":null}
+```
+
+## Use cases
+
+Routing rules shine wherever your project has conventions that are obvious to your team but opaque to a heuristic:
+
+- **`"billing:openspec"`** — anything touching billing always goes through spec-driven review, regardless of estimated size. A two-hour billing change still needs the spec gate.
+- **`"hotfix-*:claude-code"`** — hotfixes skip spec and go straight to the `claude-code` lane. Speed matters more than formality here.
+- **`"infra*:decision"`** — infrastructure changes are recorded as architectural decisions, not built through a code-delivery lane.
+
+<Tip>
+Lane routing rules are stored in `state.json` under `laneRouting[]` and are re-applied by the `CLAUDE.md` rules block every session. You do not need to re-set them after a context compaction — the rules are durable from the moment you add them.
+</Tip>

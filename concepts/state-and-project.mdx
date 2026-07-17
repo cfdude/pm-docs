@@ -1,0 +1,104 @@
+---
+title: "State Files: How PM Persists Project Context"
+sidebarTitle: "State & Files"
+description: "PM stores all project-management state in .conductor/state.json and renders a human-readable PROJECT.md view. Here is what each file contains and the rules around editing them."
+---
+
+PM's source of truth lives in `.conductor/state.json`. Every epic, every detour stack frame, every link, every tracker configuration — it's all in that one JSON file. `PROJECT.md` is a generated view rendered from it and should never be hand-edited. Understanding what each file is for — and what the rules around touching them are — prevents the class of state corruption that's hardest to debug: a file that looks valid but disagrees with the real state.
+
+## The .conductor/ directory
+
+Three files live here. Each has a distinct purpose and a distinct write policy.
+
+```text
+.conductor/
+├── state.json           # state of record — never hand-edit
+├── detours.log          # append-only trail of all detour events
+└── honcho-memories.log  # ready-to-copy Honcho memory lines
+```
+
+The directory is created by `/pm:init` and managed entirely by the PM engine after that. Only `state.json` is the authoritative source; the other two are logs and should never be edited directly.
+
+## state.json structure
+
+The top-level fields of `.conductor/state.json` and what they mean:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `active` | `string \| null` | The currently active epic id. Set by `set-active`; cleared by `clear-active`. Never hand-edit this pointer — `set-active` also keeps `status: "active"` in sync and demotes any prior active epic. |
+| `epics[]` | `array` | The full list of epics. Each entry has `id`, `title`, `lane`, `priority`, `status`, `role`, `parent?`, `links[]`, `reconcileNeeded?`, `autonomy?`, `gateReview?`, `externalId?`, `externalUrl?`, `planPath?`, and `stories[]?`. |
+| `detourStack[]` | `array` | Stack frames, LIFO order. Each frame has `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume`. |
+| `tracker` | `object?` | Optional external tracker config (`system`, `instance`, `projectKey`, `mechanism`, `repo`, `statusIntent`). Set via `/pm:tracker`. |
+| `gateGuard` | `boolean?` | Repo-level PreToolUse guard toggle. Reserved for future hook generalizations — this flag no longer controls the reconcile-owed check, which blocks unconditionally whenever `reconcileNeeded: true` regardless of this setting. |
+| `reviewMode` | `"off" \| "standard" \| "thorough"` | Repo-level review intensity dial. Defaults to `standard`. A single epic can escalate above this with `update-epic <id> --review-mode`, but never de-escalate below it. |
+| `laneRouting` | `object?` | Per-repo lane-routing overrides: `{ overrides: [{ match, lane }] }`. Checked before the generic lane heuristic. Set via `set-lane-routing`; looked up via `suggest-lane`. |
+| `pmVersion` | `string` | The plugin version that last wrote this file. Set by `/pm:init` and `/pm:upgrade`. Used by `/pm:changelog` to compute the delta. |
+
+A minimal real example of a `claude-code`-lane epic with inline stories:
+
+```json
+{
+  "id": "remove-epic-verb",
+  "title": "Add a remove-epic CLI verb",
+  "priority": "P2",
+  "status": "archived",
+  "role": "epic",
+  "lane": "claude-code",
+  "parent": "pm-plugin-improvements-2026-07-14",
+  "links": [],
+  "reconcileNeeded": false,
+  "stories": [
+    { "title": "TDD: remove-epic hard-delete, --cascade, link-stripping tests", "done": true },
+    { "title": "Implement removeEpic() + dispatch registration", "done": true },
+    { "title": "commands/epic.md + README.md docs", "done": true },
+    { "title": "Fresh-context code review (standard review mode)", "done": false }
+  ]
+}
+```
+
+## PROJECT.md
+
+`PROJECT.md` is a generated Markdown view that renders the full conductor briefing. It is re-rendered by `conductor.mjs render` after every state change. Never edit it by hand — `state.json` always wins, and the next render will overwrite any manual changes.
+
+The briefing shows:
+
+- **Active epic** — title, lane icon, priority, and current status.
+- **Detour stack** — each frame with its paused epic, reason, and spawned detour.
+- **NEXT UP queue** — highest-priority `queued` epics, P0→P3, skipping any epic starved on an unresolved `depends-on` link (with the blocker named explicitly).
+- **Per-lane counts** — how many epics are in each lane, by status.
+- **Tracker sync line** — any active-work epics missing `externalId` when a tracker is configured. Only honestly-computable drift is shown; PM never fabricates transition state it can't see.
+- **Hierarchy rollup** — for parent epics, an `X/Y children archived` progress indicator.
+
+The `SessionStart` hook re-injects the briefing via `additionalContext` every time a session opens or resumes after a compaction — this is how PM survives context loss without requiring you to re-read docs.
+
+## detours.log
+
+`.conductor/detours.log` is an append-only trail of all detour events. One entry per line:
+
+```text
+2026-07-15T14:32:00Z · a3f9c12 · minimal · fix-null-check · "fixed null guard in auth middleware"
+2026-07-15T16:10:00Z · — · substantial-push · my-feature-epic → fix-auth-middleware · "auth rejects all requests"
+2026-07-15T17:45:00Z · b7e2d44 · substantial-pop · fix-auth-middleware → my-feature-epic · "reconcile: valid"
+```
+
+Every minimal detour is logged here by the `log-detour` subcommand. Substantial pushes and pops are logged automatically. The `PostToolUse` hook also auto-detects unlogged minimal detours from commit shape (file count, commit prefix, whether an active detour is already open) and logs them without requiring a manual `/pm:detour --minimal` invocation.
+
+This log is never modified by hand. If you need to audit what happened during a session or trace when a particular change was introduced as a side-effect of a detour, this is the file to read.
+
+## CLAUDE.md rules block
+
+PM writes and maintains a managed rules block in the project's `CLAUDE.md`. This is how the conductor discipline — the detour protocols, the reconcile gate, the tracker sync instructions, the lane workflow rules — becomes part of every Claude Code session automatically, without you re-reading documentation.
+
+The rules block is:
+- **Written by `/pm:init`** when a project is first set up.
+- **Re-injected by the `SessionStart` hook** via `additionalContext` on every session open, resume, and compaction recovery, so the rules survive context loss.
+- **Refreshable via `/pm:upgrade`** after a plugin update — run it to pull in any new rules or behavioral changes from the latest version.
+- **Idempotent** — deleting the block from `CLAUDE.md` and re-running `/pm:init` or `/pm:upgrade` restores it safely. To permanently opt out, delete the block and do not run upgrade.
+
+<Warning>
+  Never hand-edit `state.json` directly. Use PM commands. Bypassing the engine means render timestamps, active-epic invariants, and cross-link consistency can silently diverge. If you must recover from a bad state, use `git checkout .conductor/state.json` to restore the last known-good version — PM's state changes are committed regularly, so git history is always the recovery path.
+</Warning>
+
+<Tip>
+  `conductor.mjs verify-state` fails loudly if `state.json` has been modified more recently than the last render stamp — a mechanical check for accidental hand-edits. Run it any time you suspect the file has drifted, or wire it into your own pre-commit checks. A clean output means the state PM is working from matches what was last rendered.
+</Tip>

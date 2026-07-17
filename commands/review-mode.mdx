@@ -1,0 +1,53 @@
+---
+title: "/pm:review-mode — Set the Repo Review Intensity"
+sidebarTitle: "/pm:review-mode"
+description: "Set the repo review dial: off (self-review only), standard (one reviewer per gate), or thorough (two independent reviewers, adjudicated on disagreement)."
+---
+
+`/pm:review-mode` sets the review intensity for the entire repository. The dial controls how many fresh-context reviewers run at each gate — a single repo-wide setting that individual epics can escalate above but never de-escalate below. It is a pure instruction-layer setting: PM never runs a review itself, it only shapes what the `CLAUDE.md` rules block tells your agent to do.
+
+## The three levels
+
+| Mode | Reviewer budget | When to use |
+|------|-----------------|-------------|
+| `off` | None — self-review only | Tiny, low-risk, single-file tweaks where a second reviewer adds no value. |
+| `standard` | One fresh-context reviewer per gate | The default. Covers Gate 1, Gate 2, and reconcile reviews for most repos. |
+| `thorough` | Two independent fresh-context reviewers per gate; adjudicate any disagreement | Schema or migration changes, security-sensitive work, or anything explicitly flagged high-stakes. |
+
+If `set-review-mode` has never been run, the mode is `standard` — matching the default Gate 1/Gate 2 behavior already documented in the conductor skill.
+
+## Setting repo review mode
+
+Pass the desired mode as a positional argument:
+
+```bash
+conductor.mjs set-review-mode off
+conductor.mjs set-review-mode standard
+conductor.mjs set-review-mode thorough
+```
+
+Re-running the command replaces the prior mode outright — there is only one active mode at a time. The `CLAUDE.md` rules block is refreshed automatically so the "Current mode" line stays accurate.
+
+## Per-epic escalation
+
+Individual epics can be escalated above the repo-wide dial without changing the setting for the whole repo:
+
+```bash
+conductor.mjs update-epic <id> --review-mode thorough
+```
+
+The escalation rules are strict:
+
+- An epic can **always escalate** above the repo dial. A P0 epic in a `standard` repo can run as `thorough`.
+- An epic can **never de-escalate** below the repo dial. Attempting to set `--review-mode off` on an epic in a `standard` repo is rejected with a non-zero exit and leaves state unchanged.
+- The **effective mode** for a given epic is `max(global dial, epic override)`. If you later raise the global dial above an epic's override, the global dial wins — an override never pins a lower effective mode than the current global setting.
+
+To query the effective mode for a specific epic, read `state.epics[].reviewMode` alongside `state.reviewMode`.
+
+<Note>
+The review mode setting is stored in `state.json` under `reviewMode`. It persists across sessions and is re-applied by every fresh `CLAUDE.md` rules refresh — you do not need to re-run `set-review-mode` after a context compaction.
+</Note>
+
+<Tip>
+For high-stakes production changes, escalate the specific epic to `thorough` even if the repo is set to `standard`. One command before starting the epic is all it takes — the rest of the repo's epics continue at `standard`.
+</Tip>

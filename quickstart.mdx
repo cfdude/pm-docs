@@ -1,47 +1,129 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with PM in Five Steps"
+sidebarTitle: "Quick Start"
+description: "Initialize PM in your Claude Code project, triage your first epic, and get your first status briefing and work recommendation in under five minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+After [installing PM](/installation), run `/pm:init` in any project to activate the conductor. PM wires up its hooks, scans for existing work, and writes the rules block that keeps it oriented across every future context compaction. This walk-through takes you from a fresh install to your first concrete work recommendation.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Initialize the conductor">
+    Navigate to your project directory and run the init command:
 
     ```bash
-    npm install your-package
+    cd your-project
+    /pm:init
     ```
+
+    On first run, the conductor engine does four things:
+
+    1. Creates `.conductor/state.json` — the durable state of record for all epics, the detour stack, and reconcile links.
+    2. Scans for any existing OpenSpec proposals and Superpowers plans and registers them as untriaged epics.
+    3. Writes the **managed rules block** into your project's `CLAUDE.md`. This block is the recurring briefing carrier — it tells every future agent (including post-compaction agents) how to drive PM correctly without re-reading the full documentation.
+    4. Renders `PROJECT.md` — the generated human-readable view of the current project state.
+
+    <Note>
+      `/pm:init` is safe to run more than once. If the project is already initialized, it is a no-op. Re-running will not overwrite your existing state or duplicate the rules block in `CLAUDE.md`.
+    </Note>
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+  <Step title="Triage your epics">
+    After scaffolding, PM will present any epics it discovered and walk you through triage. For each epic you'll set:
+
+    - **Priority** — `P0` (critical, do now) through `P3` (low, do later). This is the primary sort key for `/pm:next`.
+    - **Status** — `active` (currently being built), `queued` (ready to start), `planned` (not ready yet), or `untriaged` (just discovered, needs review).
+
+    If you have no existing OpenSpec proposals or Superpowers plans, PM starts with an empty backlog and you can add epics directly:
 
     ```bash
-    your-cli init
+    /pm:epic add --id my-feature --title "My first feature" --lane claude-code --priority P1
     ```
+
+    Lanes tell PM which execution tool owns the work: `openspec` for spec-driven proposals, `superpowers` for Superpowers plans, `claude-code` for direct agentic work, `decision` for architecture decisions, and `external` for issues tracked outside the session.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+  <Step title="Check your status briefing">
+    Run `/pm:status` to see the full conductor briefing:
 
     ```bash
-    your-cli start
+    /pm:status
     ```
+
+    The briefing shows:
+    - The **active epic** — what PM considers currently in flight, with its lane and priority.
+    - The **detour stack** — any paused epics awaiting reconcile, listed from most-recent PUSH to oldest.
+    - The **next-up queue** — the top queued epics sorted by priority, with any blocked epics annotated with their blocker.
+    - **Per-lane counts** — a summary across `openspec`, `superpowers`, `claude-code`, `decision`, and `external`.
+
+    This briefing is also what the `SessionStart` hook re-injects automatically after every context compaction — so you will see this view at the start of every new context window, not just when you run the command manually.
+  </Step>
+  <Step title="Get a work recommendation">
+    Run `/pm:next` to get a concrete, unambiguous recommendation for what to work on:
+
+    ```bash
+    /pm:next
+    ```
+
+    PM applies a simple, deterministic rule:
+
+    - If the detour stack is non-empty, the recommendation is to resume the top of the stack (and run the reconcile gate first).
+    - Otherwise, the recommendation is the highest-priority `queued` epic (P0 before P1 before P2 before P3), skipping any epic blocked by an unresolved `depends-on` link and naming the blocker when it does skip.
+
+    There is no ambiguity in the output — you either resume a paused epic or you start the top-priority queued one.
+  </Step>
+  <Step title="Start building">
+    Work in your chosen epic's lane. The conductor stays aware via hooks:
+
+    - After each `git commit`, a `PostToolUse` hook nudges you to update the epic's status and auto-detects whether the commit shape looks like an unlogged minimal detour.
+    - If an interrupt arrives mid-build, use `/pm:detour` to classify and handle it:
+
+    ```bash
+    # Minimal detour — fix it, commit, log it, resume:
+    /pm:detour --minimal "fixed null-check in auth middleware"
+
+    # Substantial detour — push the current epic and spin up a new one:
+    /pm:detour "payment processor returning 500 on retries"
+    ```
+
+    When a substantial detour is complete and you're ready to return to the original epic, run `/pm:resume`. PM pops the detour stack, dispatches a fresh-context `reconciler` agent to validate the paused epic against what the detour shipped, and writes the verdict back durably before allowing any further writes to the original epic.
+
+    When an epic is fully complete, run `/pm:sync` to pick up any new proposals or plans that arrived during the build.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Your project structure
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+After `/pm:init`, PM creates the following files in your project:
+
+```
+your-project/
+├── .conductor/
+│   ├── state.json          # epics, detour stack, links, autonomy grants
+│   ├── detours.log         # append-only detour trail (timestamp · SHA · kind · epic · note)
+│   └── honcho-memories.log # ready-to-copy Honcho memory lines, timestamped
+├── CLAUDE.md               # managed rules block (idempotent; delete to opt out)
+└── PROJECT.md              # generated view — never hand-edit
+```
+
+<Tip>
+  `PROJECT.md` is a **generated view** — it is re-rendered from `.conductor/state.json` every time you run `/pm:status` or `/pm:sync`. Never hand-edit it. If you want to change epic state, use the PM commands (`/pm:epic`, `/pm:detour`, `/pm:resume`). Hand edits will be silently overwritten.
 </Tip>
+
+## The basic loop
+
+Once initialized, the day-to-day PM workflow is a short cycle:
+
+```
+/pm:init → /pm:status → /pm:next → (build) → /pm:sync
+               ↑                        │
+               └──── /pm:detour ────────┤
+                     (minimal: fix → commit → log → resume)
+                     (substantial: PUSH → build → /pm:resume → RECONCILE GATE → POP)
+```
+
+Multi-epic batches follow a parallel track: use `/pm:hierarchy` to plan and dispatch a parent epic's children as worktree-isolated, unattended agents that converge back through sequential merge.
+
+---
+
+Now that you have PM running, explore the full feature set:
+
+- [Core Concepts](/concepts/epics-and-lanes) — epics, lanes, the detour stack, and the reconcile gate in depth.
+- [Commands](/commands) — the complete reference for every PM command.

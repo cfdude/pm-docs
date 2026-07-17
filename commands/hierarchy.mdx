@@ -1,0 +1,93 @@
+---
+title: "/pm:hierarchy — Multi-Agent Worktree Dispatch"
+sidebarTitle: "/pm:hierarchy"
+description: "Plan and dispatch a parent epic's children as batched, worktree-isolated agents. Each child runs unattended in its own branch and merges back sequentially."
+---
+
+`/pm:hierarchy` is PM's multi-agent dispatch harness. Give it a parent epic and it computes an execution plan from child priorities and `depends-on` links, then dispatches each child as an isolated agent in its own git worktree, converging them back through sequential merge. Everything is recomputed from current state each time — there is no "hierarchy in progress" flag to get out of sync.
+
+## Planning the execution
+
+Before dispatching, preview the computed batches with `plan-hierarchy`:
+
+```bash
+conductor.mjs plan-hierarchy --parent <parent-id>
+```
+
+This prints:
+
+```json
+{
+  "parent": "sprint-q1",
+  "batches": [
+    {
+      "batch": 1,
+      "epics": [
+        { "id": "task-001", "priority": "P0", "autonomous": true, "dependsOn": [] },
+        { "id": "task-002", "priority": "P0", "autonomous": true, "dependsOn": [] }
+      ]
+    },
+    {
+      "batch": 2,
+      "epics": [
+        { "id": "task-003", "priority": "P1", "autonomous": true, "dependsOn": ["task-001"] }
+      ]
+    }
+  ]
+}
+```
+
+Batches run in order. Epics within a batch have no mutual dependencies and may dispatch in parallel. The `dependsOn` field lists each epic's sibling ids it depends on within this hierarchy — use it to check transitively whether a later batch depends on a blocked child. A dependency cycle among children exits non-zero, naming the cycle.
+
+<Note>
+`plan-hierarchy` is a pure read — it recomputes from current `parent`, `priority`, `links`, and `autonomy` blocks every time. There is no "hierarchy in progress" flag to get out of sync; re-running it at any point reflects current reality.
+</Note>
+
+## Preflight requirements
+
+Before dispatch, every child epic in the plan must show `autonomous: true`. Any child that doesn't was not cleared in the preflight step. Use `set-autonomy` to grant trust:
+
+```bash
+conductor.mjs set-autonomy <id> --level autonomous
+```
+
+Run the full preflight scan for each child first — read its complete source, identify destructive or irreversible actions, and record your answers before setting `--level autonomous`. PM blocks dispatch for any non-autonomous child; do not skip the preflight.
+
+## Dispatching
+
+Each child runs as a `hierarchy-child-executor` agent in its own `git worktree` on its own branch (`hierarchy-child/<epic-id>`). Epics within the same batch that have no dependencies on each other may be dispatched in parallel using the Task tool.
+
+**The orchestrator is the sole writer of `.conductor/state.json` throughout.** Children never write state directly — they return a fixed report, and you apply all state transitions in one pass after the batch (marking each merged child `archived`). This is what makes parallel dispatch safe for the state file: there is only ever one writer, so there is nothing to merge-conflict on `state.json`.
+
+## Merge convergence and conflict resolution
+
+After each child completes, merge its worktree branch back sequentially — one at a time, even though the work ran in parallel. On a merge conflict, work through the resolution ladder in order:
+
+1. Attempt the merge normally (fast path).
+2. On conflict, dispatch the `merge-conflict-resolver` agent to read both sides plus the merge base and resolve it.
+3. If the resolver reports `STATUS: uncertain`, escalate — retry with a more capable model and/or consult the `advisor()` tool before finalizing.
+4. If still genuinely unresolvable, commit the best-effort resolution and log a follow-up epic under the same parent, then continue.
+
+Mechanical conflicts — such as a shared CHANGELOG header or usage string — resolve automatically at the merge step and are never a real logic collision.
+
+After any conflict resolution, before committing the merge, verify that every touched file has no leftover conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) and that every touched `.mjs`/`.js` file passes `node -c <file>`. Neither check is optional and neither substitutes for the other.
+
+<Warning>
+A dependency cycle exits non-zero and names the cycle. Fix the offending `links` on the child epics before retrying. Do not retry blindly — a cycle is a real data problem, not a transient failure.
+</Warning>
+
+## Changelog fragments
+
+Children write their changelog entries to `.changesets/<epic-id>.md`, never to `CHANGELOG.md`'s shared `## [Unreleased]` section directly. Writing to that shared header is a guaranteed merge conflict across every parallel batch. Because each child touches only its own fragment file, fragments never conflict with each other.
+
+Use `/pm:changesets` to list pending fragments and consolidate them into `CHANGELOG.md` once, at release time.
+
+## Cleanup
+
+After each batch, verify no orphaned worktrees remain:
+
+```bash
+conductor.mjs verify-worktrees
+```
+
+This cross-references `git worktree list` against epic status and flags any `hierarchy-child/*` worktree whose epic is already archived but was not cleaned up. Once a child's branch has merged, remove its worktree and delete its branch immediately — never leave them dangling.

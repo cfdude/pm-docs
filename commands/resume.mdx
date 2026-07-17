@@ -1,0 +1,67 @@
+---
+title: "/pm:resume — Resume a Paused Epic After a Detour"
+sidebarTitle: "/pm:resume"
+description: "Pop the detour stack, restore the paused epic to active, and run the reconcile gate — a fresh-context re-validation before any new code is written."
+---
+
+`/pm:resume` pops the top frame from the detour stack, restores the paused epic to active status, and runs the mandatory reconcile gate if the frame has `reconcileOnResume: true`. This is the structured re-entry to work that was parked — the step otherwise lost after a context compaction. Do not skip it or hand-clear `reconcileNeeded` directly.
+
+## Prerequisites
+
+Before running `/pm:resume`, confirm that the detour epic is **archived** and its work is committed and deployed. If the detour isn't finished yet, it is not time to resume — finish the detour first and archive it, then come back here.
+
+## What happens
+
+<Steps>
+  <Step title="Verify the detour is complete">
+    Confirm the detour epic is archived and all changes are committed. If anything is still in progress, stop and finish the detour first.
+  </Step>
+  <Step title="Pop the stack frame">
+    Remove the top frame from `detourStack` in `.conductor/state.json`.
+  </Step>
+  <Step title="Restore the paused epic">
+    Set the paused epic's `status` back to `active` and update the `.active` pointer to it.
+  </Step>
+  <Step title="Delegate to the reconciler (if required)">
+    If the popped frame had `reconcileOnResume: true`, do not write any code yet. Delegate a clean-context review to the **reconciler** agent via the Task tool, passing it the paused epic id and the detour epic id.
+  </Step>
+  <Step title="Receive the verdict">
+    The reconciler re-reads the paused proposal, diffs what the detour actually changed, and reports back `VERDICT: valid|invalidated` plus `AMENDMENTS:` — one story to add, remove, or amend per line.
+  </Step>
+  <Step title="Write the verdict back durably">
+    Record the result with:
+    ```bash
+    conductor.mjs record-reconcile <paused-id> \
+      --detour <detour-id> \
+      --verdict <valid|invalidated> \
+      --amendments "<amendment-a>;<amendment-b>"
+    ```
+    This attaches `{ verdict, amendments, reconciledAt }` to the paused epic's link to the detour and clears `reconcileNeeded` in one step. Do not hand-clear `reconcileNeeded` — use this command.
+  </Step>
+  <Step title="Re-render and continue">
+    Run `conductor.mjs render`, then state the exact next story to build on the resumed epic.
+  </Step>
+</Steps>
+
+## Reconcile verdicts
+
+| Verdict | Meaning | What to do |
+|---------|---------|------------|
+| `valid` | The detour's changes don't affect the paused plan — it is still sound. | Resume building immediately. |
+| `invalidated` | The detour's changes affect the paused plan. | Amend the OpenSpec proposal and `tasks.md` before continuing. |
+
+Either way, always write the verdict back with `record-reconcile`. Narration alone in the transcript does not clear `reconcileNeeded`.
+
+## Honcho memory
+
+After the reconcile gate completes, preserve the resume context for Honcho:
+
+```bash
+conductor.mjs honcho-memory pop <parent-epic-id> "<detour-id>; reconcile = valid"
+```
+
+This prints a formatted `resumed <parent>, reconciled vs <detour-id>; reconcile = valid` line and appends a timestamped copy to `.conductor/honcho-memories.log`. Paste the printed line into your Honcho MCP memory tool. The engine only formats and logs the string — it never calls Honcho itself.
+
+<Warning>
+The gate guard mechanically blocks `Edit`, `Write`, and `NotebookEdit` on the active epic while `reconcileNeeded` is true. This is unconditional — it applies regardless of the repo's `gateGuard` setting and cannot be bypassed with `set-gate-guard off`. Run the full reconcile gate and call `record-reconcile` to clear it.
+</Warning>

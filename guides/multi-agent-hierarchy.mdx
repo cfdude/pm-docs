@@ -1,0 +1,110 @@
+---
+title: "Run Multi-Agent Epics with PM Hierarchy"
+sidebarTitle: "Multi-Agent"
+description: "Dispatch a parent epic's children as worktree-isolated, unattended agents. PM converges their work back through sequential merge with zero data loss."
+---
+
+When a parent epic has multiple children, PM can dispatch each child as its own agent in an isolated git worktree. They run unattended, converge back sequentially, and the orchestrator stays the sole writer of `.conductor/state.json` throughout. This is not a metaphor for parallel development — it is an actual dispatch-and-converge framework that PM has run through 21 agents across its own dogfooding batches with zero data loss and zero unresolvable conflicts.
+
+## Prerequisites
+
+Every child epic must be granted autonomous execution trust before it can be dispatched. PM runs a mandatory preflight scan for each child: it reads the child's full source (proposal, design docs, plan, or inline stories depending on the lane) and produces a list of destructive-risk points and genuine unknowns to review with you. Only after you have answered those questions and the answers have been recorded via `set-autonomy` will the child show `autonomous: true` in the plan.
+
+PM blocks dispatch for any child that does not show `autonomous: true`. Do not attempt to dispatch a non-autonomous child — it will immediately hit the "no context to act on" decision rule and stop.
+
+## Planning the hierarchy
+
+<Steps>
+  <Step title="Register child epics under a parent">
+    Use `/pm:epic add --parent <parent-id> --id <child-id> --title "…" --lane <lane> --priority <P>` for each child, or bulk-create a parent and all children atomically with `add-many --from <path>`.
+  </Step>
+  <Step title="Set dependency links between children">
+    If execution order matters — for example, an auth epic must complete before an API epic can start — record the dependency with `update-epic <api-epic-id> --link depends-on:<auth-epic-id>`. Children with no dependencies within the same batch can run in parallel.
+  </Step>
+  <Step title="Run the preflight scan">
+    Compute the execution plan and verify readiness:
+    ```bash
+    node "$ENGINE" plan-hierarchy --parent <parent-id>
+    ```
+    This prints the full batch plan including autonomy status for every child.
+  </Step>
+  <Step title="Review the batch output">
+    Batches run in order; epics within a batch have no dependencies on each other and may run in parallel. Review the output to confirm ordering is correct before proceeding.
+  </Step>
+  <Step title="Confirm every child is autonomous">
+    Every child in the plan must show `autonomous: true`. Any that don't were not cleared in the preflight — run the autonomy scan for those children and record the results before dispatching.
+  </Step>
+</Steps>
+
+## The plan-hierarchy output
+
+`plan-hierarchy` produces a JSON structure that shows exactly which batches will run, in what order, and which children may dispatch in parallel within each batch:
+
+```json
+{
+  "parent": "feature-sprint",
+  "batches": [
+    {
+      "batch": 1,
+      "epics": [
+        { "id": "auth-epic", "priority": "P0", "autonomous": true, "dependsOn": [] }
+      ]
+    },
+    {
+      "batch": 2,
+      "epics": [
+        { "id": "api-epic", "priority": "P1", "autonomous": true, "dependsOn": ["auth-epic"] }
+      ]
+    }
+  ]
+}
+```
+
+`dependsOn` lists sibling ids (within this hierarchy) that must be archived before the epic can run. Check it transitively — a dependency chain can be more than one hop deep.
+
+## Dispatching
+
+Each child runs as a `hierarchy-child-executor` agent in its own `hierarchy-child/<epic-id>` git worktree and branch. The orchestrator dispatches them via the Task tool. Within a batch, children with no dependencies on each other may be dispatched in parallel in the same turn.
+
+Children never write `.conductor/state.json` themselves. They execute their work and return a structured report. The orchestrator is the sole writer of state transitions, applied in one pass after each batch completes — never interleaved with dispatch. This is what makes parallel dispatch safe for the state file: there is only ever one writer.
+
+## Merge convergence
+
+After each child completes, the orchestrator merges its worktree branch back. An ordinary merge conflict is never a hard stop — PM has a tiered resolution ladder:
+
+1. **Normal `git merge`** — fast-path; most merges land cleanly
+2. **`merge-conflict-resolver` agent** — dispatched automatically when a normal merge fails; reads both sides and the merge base to resolve the conflict
+3. **Escalation** — if the resolver reports `STATUS: uncertain`, retry with a more capable model or consult the `advisor()` tool before finalizing
+4. **Logged follow-up epic** — if still unresolvable, commit the best-effort resolution (still fully recoverable via git history) and log a new follow-up epic under the same parent
+
+The instruction "tell the human you can't merge this" is explicitly designed out of the process. Every conflict has a next step.
+
+After any conflict resolution — regardless of which rung resolved it — the orchestrator verifies every touched file for leftover conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) and runs `node -c <file>` on every touched `.mjs` or `.js` file before committing. Neither check is optional.
+
+## Changelog fragments
+
+Dispatched children write their changelog entries to `.changesets/<epic-id>.md`, never to `CHANGELOG.md` directly. Writing to the shared `[Unreleased]` header is a guaranteed merge conflict across every parallel batch — this was confirmed empirically at a 100% collision rate across the first two PM dogfood batches.
+
+Each child touches only its own fragment file. The orchestrator remains the sole writer of `CHANGELOG.md` and consolidates fragments at release time using `/pm:changesets`.
+
+## State transitions
+
+The orchestrator applies all state transitions in a single pass after each batch is fully merged — not interleaved with dispatch. Once every child in a batch has reported back and merged, the orchestrator marks each one `archived` in `.conductor/state.json`. The parent epic itself is never auto-archived — that is always a human call.
+
+## Cleanup
+
+After all batches are merged, run:
+
+```bash
+node "$ENGINE" verify-worktrees
+```
+
+This cross-references `git worktree list` against epic status and flags any `hierarchy-child/*` worktree whose epic is already archived but was not cleaned up. Clean worktrees immediately after each child merges — never leave them dangling.
+
+<Note>
+  `plan-hierarchy` is a pure read — it recomputes the execution plan fresh from `parent`, `priority`, `links[]`, and `autonomy` every time you run it. There is no "hierarchy in progress" flag that can get out of sync. Re-running it at any point reflects current reality.
+</Note>
+
+<Warning>
+  A dependency cycle among children causes `plan-hierarchy` to exit non-zero, naming the specific cycle. This is a real data problem — two children have `depends-on` links pointing at each other, directly or transitively. Fix the offending `links` entries in `.conductor/state.json` before retrying.
+</Warning>

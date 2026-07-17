@@ -1,0 +1,118 @@
+---
+title: "The Detour Stack: Resumable Interruptions"
+sidebarTitle: "Detour Stack"
+description: "The PM detour stack is an explicit PUSH/POP mechanism that parks current work when an interruption hits, preserving full context for a clean resume later."
+---
+
+When something breaks mid-build, most tools lose the thread. PM's detour stack treats every interruption as a structured stack frame: the current epic is paused and pushed onto the stack, the interrupt becomes its own epic in the right lane, and resume is a deliberate POP with a mandatory reconcile gate. Nothing is left to memory — the reason, the cross-links, and the obligation to reconcile are all written durably into `.conductor/state.json` before a single line of detour code is written.
+
+## Minimal vs. substantial detours
+
+The first step of `/pm:detour` is always classification. Do not start fixing before deciding which kind the interruption is.
+
+<CardGroup cols={2}>
+  <Card title="Minimal detour" icon="wrench">
+    Small, self-contained, no design ambiguity. Fits before the next context compaction and doesn't reshape the current proposal.
+
+    **Path:** Fix → test → commit → `log-detour "<what you fixed>"` → resume. No stack entry. No proposal. The log call appends a timestamped line + commit SHA to `.conductor/detours.log`.
+  </Card>
+  <Card title="Substantial detour" icon="layer-group">
+    Needs its own design, changes shared behavior, or is multi-step.
+
+    **Path:** Becomes its own epic in the appropriate lane. Run PUSH. When unsure, treat as substantial — a needless stack entry is cheap; a lost thread is the whole problem PM is solving.
+  </Card>
+</CardGroup>
+
+## What a stack frame contains
+
+A detour stack frame records everything needed to restore context after the detour is resolved:
+
+```json
+{
+  "pausedEpic": "my-feature-epic",
+  "pausedAt": "2026-07-15T14:32:00.000Z",
+  "reason": "Auth middleware rejects all requests — must fix before feature can be tested",
+  "spawnedDetour": "fix-auth-middleware",
+  "reconcileOnResume": true
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `pausedEpic` | The epic id that was active when the interruption hit. |
+| `pausedAt` | ISO timestamp of when the PUSH occurred. |
+| `reason` | A concrete human-readable explanation of why work was parked. |
+| `spawnedDetour` | The id of the new epic created to resolve the interruption. |
+| `reconcileOnResume` | When `true`, the reconcile gate fires automatically on POP. Default `true` whenever the detour touches code or behavior the paused epic depends on. |
+
+The stack is LIFO — the most recent push is always what `/pm:resume` pops. Multiple nested detours are supported; each POP restores exactly one level.
+
+## PUSH: entering a substantial detour
+
+When `/pm:detour` classifies an interruption as substantial, the following steps run in order:
+
+<Steps>
+  <Step title="Commit all uncommitted work">
+    Make the current epic's progress source (e.g. `tasks.md`) reflect reality, then commit so nothing is left staged or dirty. The paused epic's state must be clean before it's parked.
+  </Step>
+  <Step title="Pause the current epic">
+    Set the current epic's `status` to `paused` in `.conductor/state.json`.
+  </Step>
+  <Step title="Push a frame onto detourStack">
+    Write the stack frame with `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume: true` (default) onto `.conductor/state.json`'s `detourStack[]`.
+  </Step>
+  <Step title="Create the detour epic">
+    Register the detour as a new epic with `role: "detour"`, the appropriate lane, and usually priority `P0`. Add the cross-links: detour `resolves-blocker-for` parent; parent `may-invalidate` detour.
+  </Step>
+  <Step title="Set the detour as active">
+    Call `set-active <detour-id>`. Build the detour through its lane's normal workflow and archive it when complete.
+  </Step>
+  <Step title="Write a Honcho memory">
+    Get the ready-to-copy memory line and log it durably:
+    ```bash
+    node "$ENGINE" honcho-memory push <parent-epic-id> "<reason>"
+    ```
+    This prints `paused <parent> for <reason>` and appends a timestamped copy to `.conductor/honcho-memories.log`. Paste the printed line into your Honcho MCP memory tool call — the engine only formats and logs the string, it never calls Honcho itself.
+  </Step>
+</Steps>
+
+## POP: leaving a detour
+
+When the detour epic is archived and `/pm:resume` runs:
+
+<Steps>
+  <Step title="Verify the detour is archived">
+    Confirm the detour epic's status is `archived` and its work is committed or deployed. If not, it's not time to resume — finish the detour first.
+  </Step>
+  <Step title="Pop the top frame">
+    Remove the top frame from `detourStack[]` in `.conductor/state.json`. If `reconcileOnResume` was `true`, set `reconcileNeeded: true` on the paused epic before popping — this is the only place that obligation survives once the frame is gone.
+  </Step>
+  <Step title="Restore the paused epic to active">
+    Set the paused epic's `status` back to `active` and call `set-active <paused-id>`.
+  </Step>
+  <Step title="Run the reconcile gate">
+    If `reconcileOnResume` was `true`, the reconcile gate fires now. A fresh-context `reconciler` agent re-reads the paused proposal and diffs what the detour actually shipped. Do not write code until the gate clears. See [The Reconcile Gate](/concepts/reconcile-gate) for the full flow.
+  </Step>
+</Steps>
+
+<Warning>
+  Never start writing code after popping a detour until the reconcile gate has run. The `PreToolUse` gate-guard hook mechanically blocks `Edit`, `Write`, and `NotebookEdit` while `reconcileNeeded: true` is set on the active epic. This is unconditional and cannot be bypassed with `set-gate-guard off`. The only path past it is running the reconcile gate and recording the verdict via `record-reconcile`.
+</Warning>
+
+## Honcho integration
+
+Both `/pm:detour` (PUSH) and `/pm:resume` (POP) emit a ready-to-copy Honcho memory line via the `honcho-memory` subcommand:
+
+```bash
+# On PUSH
+node "$ENGINE" honcho-memory push <parent-epic-id> "<reason>"
+# → prints: paused <parent> for <reason>
+
+# On POP
+node "$ENGINE" honcho-memory pop <parent-epic-id> "<detour-id>; reconcile = valid | amended: …"
+# → prints: resumed <parent>, reconciled vs <detour-id>; reconcile = valid | amended: …
+```
+
+Both calls also append a timestamped copy of the emitted string to `.conductor/honcho-memories.log`. This local log exists precisely because the line needs to be pasted into an actual Honcho MCP tool call — if you forget to paste it, the log is your fallback. The engine only formats and logs; it never calls Honcho itself. This keeps PM squarely on the instruction layer and never the integration layer.
+
+Honcho is valuable here because it lets the detour relationship survive outside this repo — across context compactions, across machines, and across sessions weeks later. The detour stack in `.conductor/state.json` is the live working set for one project; Honcho is where the relationship goes when it needs to outlive the project's own context window.

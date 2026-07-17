@@ -1,0 +1,85 @@
+---
+title: "Daily Workflow with PM in Claude Code"
+sidebarTitle: "Daily Workflow"
+description: "A practical guide to using PM day-to-day: starting sessions, checking status, picking work, and keeping your epic queue healthy across context compactions."
+---
+
+PM integrates into Claude Code at the session level — a `SessionStart` hook automatically injects the project briefing every time you start or resume, even after a context compaction. This guide covers the commands you'll use every day once your project is initialized with `/pm:init`.
+
+## Starting a session
+
+The moment Claude Code opens, PM is already working. The `SessionStart` hook fires on `startup`, `resume`, and `compact` events and runs `conductor.mjs brief` automatically. Without typing a single command, you immediately see:
+
+- The **active epic** — its lane, priority, and current story progress
+- The **detour stack** — any paused work, with `⚠ reconcile-on-resume` flags where applicable
+- The **next-up queue** — your highest-priority `queued` epics ordered P0 → P3
+
+If no project has been initialized with `/pm:init`, the hook is a complete no-op — it exits silently and does not affect the session in any way.
+
+## The daily loop
+
+A typical working day with PM follows a clear rhythm:
+
+<Steps>
+  <Step title="Open Claude Code">
+    The `SessionStart` briefing fires automatically. You see the active epic, any paused work, and your queue — no command needed.
+  </Step>
+  <Step title="Confirm with /pm:status">
+    Run `/pm:status` for a fresh-rendered view. This re-renders `PROJECT.md` from `.conductor/state.json` first, so the output always reflects the current state of record.
+  </Step>
+  <Step title="Get a work recommendation">
+    Run `/pm:next` to receive a concrete recommendation for what to build right now. PM applies the full priority algorithm and tells you exactly which epic to pick up and why.
+  </Step>
+  <Step title="Build the active epic in its lane">
+    Work through the epic using whatever workflow its lane requires — an OpenSpec proposal flow, a Superpowers plan, or a direct claude-code build. PM tracks status but stays out of your way while you build.
+  </Step>
+  <Step title="Commit and update status">
+    After each `git commit`, PM's `PostToolUse` hook nudges you to update the epic's status in `.conductor/state.json`. This keeps the index honest and re-renders `PROJECT.md` automatically.
+  </Step>
+  <Step title="Sync new work">
+    Run `/pm:sync` to register any new OpenSpec proposals or Superpowers plans that appeared on disk since your last session. If a `github-issues` tracker is configured, this also pulls open issues in as untriaged epics.
+  </Step>
+</Steps>
+
+## Checking status
+
+`/pm:status` re-renders the briefing on demand. What you see:
+
+- **Active epic** — the currently in-flight epic, its lane (e.g. `openspec`, `superpowers`, `claude-code`), and live story progress read directly from checkbox state in `tasks.md` or your plan file
+- **Detour stack** — every paused frame in order, with a `⚠ reconcile-on-resume` warning on any frame whose detour touched code the paused epic depends on
+- **Next-up queue** — the highest-priority `queued` epics sorted P0 → P3, with `depends-on` blockers named inline
+- **Per-lane counts** — how many epics are active, queued, or paused in each lane
+
+The underlying state of record is always `.conductor/state.json`. `PROJECT.md` is a generated view — re-render it any time by running `/pm:status` or the `render` subcommand directly.
+
+## Deciding what's next
+
+`/pm:next` applies a strict priority algorithm so you never have to guess:
+
+1. **If the detour stack is non-empty** — the top frame is the answer. Finish or resume that work before picking up anything new.
+2. **Otherwise** — find the highest-priority `queued` epic, ordered P0 → P3.
+3. **Ties** — if two epics share the same priority, PM surfaces both and asks you to decide rather than silently picking one.
+
+The `depends-on` link also shapes the queue: if an epic's declared dependency is not yet `archived`, that epic is skipped entirely and the blocker is named explicitly in the output. You always know *why* something was skipped, not just that it was.
+
+## After a context compaction
+
+PM is designed around the assumption that context will compact. Two hooks collaborate to make the recovery seamless:
+
+- **`PreCompact`** fires right before the context window collapses. It runs `conductor.mjs snapshot`, which re-renders `PROJECT.md` and writes `.conductor/brief.txt` with the freshest possible state — so nothing is lost in the collapse.
+- **`SessionStart`** fires immediately after (on the `compact` event) and re-injects the full briefing via `additionalContext`. By the time you see the next response, PM has already re-oriented the session around the current queue.
+
+You do not need to do anything special after a compaction. PM handles the handoff.
+
+## After every git commit
+
+The `PostToolUse` hook fires after every Bash tool use that includes a `git commit`. PM runs `commit-nudge`, which does two things:
+
+1. Re-renders `PROJECT.md` so the index stays current.
+2. Inspects the commit shape to detect whether it looks like an unlogged minimal detour — a small, self-contained fix that happened silently. If it does, PM suggests running `log-detour` to append a timestamped record to `.conductor/detours.log`.
+
+The nudge is non-blocking. It surfaces the suggestion and moves on — it does not pause execution or wait for a response.
+
+<Tip>
+  Keep `PROJECT.md` open in a split pane. It updates after every `render` call so you can see the live queue, active epic, and detour stack at a glance without running a command.
+</Tip>

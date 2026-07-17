@@ -1,0 +1,84 @@
+---
+title: "PM and the Perfect Quartet of Claude Code Plugins"
+sidebarTitle: "Companion Plugins"
+description: "PM works standalone but was designed to pair with OpenSpec, Superpowers, and Honcho. Each companion adds a layer PM deliberately does not own."
+---
+
+PM works completely on its own — install it and `/pm:init` gives you cross-epic priority ordering, an explicit detour stack, and the reconcile gate immediately, with no other plugin required. That said, PM was designed to sit above three companion plugins, and each one adds something PM deliberately leaves alone. The quartet covers every layer from raw memory through execution discipline without any two plugins owning the same thing.
+
+## The Perfect Quartet
+
+<CardGroup cols={2}>
+  <Card title="PM (this plugin)" icon="list-check">
+    Cross-epic priority ordering, the explicit detour stack, the reconcile gate on resume, and the multi-agent dispatch harness for parent-child epic hierarchies.
+  </Card>
+  <Card title="OpenSpec" icon="file-lines">
+    Spec-driven proposal workflow — `proposal.md`, `design.md`, and `tasks.md` — with two mandatory gate reviews before a change can be archived. PM tracks the epic; OpenSpec owns what gets built and the durable spec record.
+  </Card>
+  <Card title="Superpowers" icon="bolt">
+    Execution discipline: TDD, brainstorming, subagent-driven development, and code review. PM tracks when and in what order epics run; Superpowers drives how well each one gets built.
+  </Card>
+  <Card title="Honcho" icon="brain">
+    Durable memory that survives outside any single repo or context window. PM's detour stack is the live working set for one project; Honcho is where that state goes so it outlives a compaction, a new machine, or a week away.
+  </Card>
+</CardGroup>
+
+## OpenSpec
+
+When an epic is in the `openspec` lane, PM tracks its priority and status while OpenSpec owns the full proposal lifecycle. That means a `proposal.md` is written and reviewed (Gate 1) before any code is written, and an implementation review (Gate 2) is completed before the epic can be archived.
+
+Gate 2 is enforced mechanically — `update-epic --status archived` on an `openspec`-lane epic is rejected by the engine unless a passing `gateReview.gate2.verdict === "pass"` has already been recorded via `record-gate-review`. This is not narration; it is a hard check that runs at archive time.
+
+Install OpenSpec:
+
+```bash
+npm install -g @fission-ai/openspec
+cd your-project
+openspec init
+```
+
+## Superpowers
+
+When an epic is in the `superpowers` lane, PM tracks when it runs and in what order relative to the rest of the backlog. Superpowers drives everything about how well it gets built: brainstorming sessions, test-driven implementation, subagent-driven parallelism, and structured code review.
+
+The two plugins complement rather than overlap. PM answers "what is next and in what order." Superpowers answers "how do we build this well."
+
+Install Superpowers from the official Anthropic marketplace:
+
+```bash
+/plugin marketplace add anthropics/claude-plugins-official
+/plugin install superpowers@claude-plugins-official
+```
+
+## Honcho
+
+PM's detour stack and reconcile gate are scoped to one project's live working set. Honcho extends that memory beyond the project: across repos, across sessions, and across machines.
+
+The practical use case: when you push a substantial detour onto the stack, PM can format a ready-to-paste Honcho memory line describing the pivot. When you resume and complete the reconcile gate, PM formats a corresponding pop memory line. Paste those lines into your Honcho MCP memory tool and the relationship between the interrupted work and the detour survives a context compaction, a `git clone` on a new machine, or coming back to the project a week later.
+
+This matters most once you are juggling more than one PM-managed repo. A single project's detour history lives fine in `.conductor/state.json`. Cross-project context, or context that needs to outlive the repo entirely, is what Honcho is for.
+
+For setup, start at [docs.honcho.dev](https://docs.honcho.dev) or the source at [github.com/plastic-labs/honcho](https://github.com/plastic-labs/honcho). Both a hosted option and self-hosted deployment are available.
+
+## How they layer
+
+The four tools form a clean stack with no overlapping ownership:
+
+```
+Honcho         ← durable memory across repos and sessions
+PM             ← cross-epic ordering, detour stack, reconcile gate
+OpenSpec       ← spec-driven proposal workflow (openspec lane)
+Superpowers    ← execution discipline (superpowers lane)
+```
+
+Each layer depends only on the layers below it. PM doesn't know or care how OpenSpec enforces its gate discipline or how Superpowers structures a TDD session — it only tracks that an epic in that lane is `active`, `paused`, or `archived`. OpenSpec and Superpowers don't know or care about PM's queue ordering — they execute the work they were given.
+
+This separation is what makes the quartet composable. You can add or remove any companion without changing how the others behave.
+
+<Tip>
+  PM's Honcho integration is opt-in and available through the `honcho-memory` subcommand, which formats a ready-to-paste memory line and appends a timestamped copy to `.conductor/honcho-memories.log`. The engine never calls Honcho directly — you paste the formatted line into your Honcho MCP memory tool. Run `node "$ENGINE" honcho-memory push <epic-id> "<reason>"` before a detour and `honcho-memory pop <epic-id> "<detour-id>; reconcile = valid"` after resuming.
+</Tip>
+
+<Note>
+  None of the companions are required. PM works entirely on its own in `claude-code` and `decision` lanes — straight builds with no design gate and product decisions with no execution component. Install the companions when you need what they add, not before.
+</Note>

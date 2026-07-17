@@ -1,0 +1,47 @@
+---
+title: "/pm:upgrade — Migrate State and Refresh Rules"
+sidebarTitle: "/pm:upgrade"
+description: "Refresh the CLAUDE.md managed rules block, run any pending state migrations, re-render PROJECT.md, and stamp the new pmVersion. Safe to run more than once."
+---
+
+`/pm:upgrade` brings your project up to date after installing a new version of PM. It refreshes the managed rules block in `CLAUDE.md`, runs any pending migrations on `.conductor/state.json`, re-renders `PROJECT.md`, and stamps the new `pmVersion` — all without touching your epic history or any non-PM content. Use it whenever the `SessionStart` briefing shows an upgrade nudge like `pm 0.4.0 → 0.4.1 available`.
+
+## When to run it
+
+The `SessionStart` briefing tells you when an upgrade is needed. The sequence is always:
+
+1. Install the new PM version via the Claude Code plugin marketplace.
+2. Run `/reload-plugins` (or restart Claude Code) to load the new plugin code into the running session.
+3. Run `/pm:upgrade` to migrate your project's state and refresh the rules block.
+
+If you skip step 2, Claude Code is still executing the old plugin code and the upgrade will not apply the correct migrations. The briefing message `"this is pm 0.4.0 but 0.4.1 is installed"` is the reload reminder — it means the reload has not happened yet.
+
+## What it does
+
+<Steps>
+  <Step title="Refreshes the CLAUDE.md rules block">
+    The managed PM section in `CLAUDE.md` is replaced with the version shipped by the new plugin. Any content outside the managed delimiters — your own notes, other tool rules, project context — is left completely untouched.
+  </Step>
+  <Step title="Runs pending state migrations">
+    The engine applies any schema migrations needed to bring `state.json` up to the new version's format. Migrations are idempotent: if your state is already at the target schema, the migration step is skipped with no changes written.
+  </Step>
+  <Step title="Re-renders PROJECT.md">
+    `PROJECT.md` is regenerated from the now-migrated `state.json`, picking up any new fields or formatting changes introduced in the new version.
+  </Step>
+  <Step title="Stamps pmVersion">
+    The `pmVersion` field in `state.json` is updated to the newly installed version, so future `SessionStart` checks know the upgrade has been applied and stop showing the nudge.
+  </Step>
+  <Step title="Prints the changelog delta">
+    PM prints the changelog entries between your previous version and the current one so you know exactly what changed and what new capabilities or behavior to expect.
+  </Step>
+</Steps>
+
+## Idempotency
+
+Running `/pm:upgrade` more than once is always safe. If your project is already at the latest version, every step is a no-op — nothing is written, nothing is changed, and the command exits cleanly.
+
+<Warning>
+  Always run `/reload-plugins` **before** `/pm:upgrade` when you've just installed a new version. If you skip the reload, Claude Code is still running the old plugin code, and the upgrade command will apply the old engine's logic rather than the new one. Reload first, then upgrade.
+</Warning>
+
+To see what changed between versions without running the upgrade, use `/pm:changelog`.
