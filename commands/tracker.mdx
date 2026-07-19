@@ -14,7 +14,7 @@ PM treats the following as real signals that a tracker is in active use:
 
 - A connected issue-tracker MCP that is in use — `mcp__jira__*`, `mcp__linear__*`, a GitHub Issues/Projects tool, or similar.
 - Real issue-key conventions in commit or branch history — for example, `PROJ-123` or `#42`.
-- An explicit statement in `CLAUDE.md` or `README` that "we track work in &lt;X&gt;".
+- An explicit statement in `CLAUDE.md` or `README` that "we track work in \<X\>".
 
 When a signal is found, PM offers the connection as a choice — it never assumes. Saying no changes nothing about local tracking; the conductor still records every epic, status, priority, and story in `.conductor/state.json` and `PROJECT.md`.
 
@@ -34,7 +34,7 @@ conductor.mjs set-tracker \
 ```
 
 | Flag | Description |
-|------|-------------|
+| --- | --- |
 | `--system` | Any string identifying the tracker — `jira`, `linear`, `github-issues`, `gitlab`, etc. |
 | `--instance` | Your tracker's hostname or workspace slug (e.g., `your-company` for `your-company.atlassian.net`). |
 | `--project` | The project key your epics belong to, such as `PROJ` or `JOB`. |
@@ -102,10 +102,36 @@ During `/pm:sync`, your agent:
 
 `github-issues` does **not** auto-create GitHub Issues for local epics. That direction is intentionally omitted to avoid silently creating public issues on your behalf.
 
+## Primary \+ secondary trackers
+
+A repo has exactly one **primary** tracker — everything above — plus, optionally, one or more **secondary** trackers. Secondary trackers cover a different case: your real dev tracker is Jira, but you also want to watch a GitHub repo for inbound issues, for example from outside contributors, or from another internal repo publishing cross-project notifications (a service filing a GitHub issue in a downstream repo to flag a breaking change).
+
+A secondary tracker gets exactly two behaviors:
+
+1. **Inward pull** — open issues become untriaged epics, the same shape as the `github-issues` inward sync above, but deduped by `externalUrl` (globally unique) rather than bare `externalId` (only unique within one tracker/repo — two secondary trackers can each have an issue numbered `#42` without colliding).
+2. **Completion status writeback** — when an epic sourced from a secondary tracker reaches `archived`, your agent closes the linked issue there too. This is new: even the inward-only `github-issues` case above never did this before.
+
+A secondary tracker **never** gets outward-created issues. That direction stays exclusive to the primary tracker.
+
+```bash
+# Add a secondary tracker
+conductor.mjs set-tracker --role secondary --system github-issues --repo acme/market-intelligence
+
+# A repo can have more than one
+conductor.mjs set-tracker --role secondary --system github-issues --repo acme/risk-engine
+
+# Remove one that's gone stale
+conductor.mjs set-tracker --role secondary --system github-issues --repo acme/decommissioned-repo --remove
+```
+
+Identify a secondary entry the same way you'd identify the primary tracker — `--system` plus `--repo` or `--project`. Re-running `set-tracker --role secondary` with a matching `system` \+ `repo`/`project` merges into the existing entry instead of adding a duplicate. `--remove` against a key with no match exits non-zero and changes nothing.
+
+Once configured, the `CLAUDE.md` rules block gains one "Secondary tracker sync" section per entry, in addition to — never instead of — the primary tracker's own section.
+
 ## TRACKER SYNC briefing line
 
 In the session briefing, the `TRACKER SYNC` line lists only epics with an active status that still lack an `externalId`. PM never fabricates transition state — it cannot see the tracker's current workflow position and will not guess at it.
 
 <Info>
-Tracker awareness is additive. The conductor always tracks everything locally. A tracker only adds an external mirror — saying no to a tracker prompt changes nothing about local tracking, issue counts, or epic statuses.
+  Tracker awareness is additive. The conductor always tracks everything locally. A tracker only adds an external mirror — saying no to a tracker prompt changes nothing about local tracking, issue counts, or epic statuses.
 </Info>
