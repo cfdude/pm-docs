@@ -61,7 +61,7 @@ A fully configured tracker block in `.conductor/state.json` looks like this:
 }
 ```
 
-`statusIntent` maps PM's lifecycle to a *semantic* target — for example, `"active": "in-progress"` — never a literal tracker workflow transition name like `"Start Progress"`. Your agent resolves the real transition when it executes the sync instruction.
+`statusIntent` maps PM's lifecycle to a _semantic_ target — for example, `"active": "in-progress"` — never a literal tracker workflow transition name like `"Start Progress"`. Your agent resolves the real transition when it executes the sync instruction.
 
 ## Bidirectional mirroring (Jira, Linear, and others)
 
@@ -103,6 +103,32 @@ Once set, the CLAUDE.md rules block gains a "GitHub issue sync" section. During 
 1. `gh issue list --repo <repo> --state open --json number,title,url,labels`
 2. For each issue, check whether an epic already has that issue number as its `externalId` — if so, skip it. Re-running sync must never create a duplicate epic for the same issue.
 3. Register new issues: `add-epic --status untriaged --external-id <number> --external-url <url> --lane claude-code --priority P2` — unless the issue carries a `P0`/`P1`/`P2`/`P3` label, in which case use that priority instead.
+
+## Primary \+ secondary trackers
+
+A repo has exactly one **primary** tracker — everything above — plus, optionally, one or more **secondary** trackers. Secondary trackers cover a different case: your real dev tracker is Jira, but you also want to watch a GitHub repo for inbound issues, for example from outside contributors, or from another internal repo publishing cross-project notifications (a service filing a GitHub issue in a downstream repo to flag a breaking change), without Jira losing its primary spot.
+
+A secondary tracker gets exactly two behaviors, both narrower than primary:
+
+1. **Inward pull** — open issues become untriaged epics, the same shape as the `github-issues` inward sync above, but deduped by `externalUrl` (globally unique) rather than bare `externalId` (only unique within one tracker/repo — two secondary trackers can each have an issue numbered `#42` without colliding).
+2. **Completion status writeback** — when an epic sourced from a secondary tracker reaches `archived`, your agent closes the linked issue there too. This capability is new: even the inward-only `github-issues` case above never wrote status back before this.
+
+A secondary tracker **never** gets outward-created issues — a new local epic, or any status change, never causes your agent to create or transition an issue there. That stays exclusive to the primary tracker.
+
+```bash
+# Add a secondary tracker (role defaults to primary, so this always needs --role secondary)
+node "$ENGINE" set-tracker --role secondary --system github-issues --repo acme/market-intelligence
+
+# A repo can have more than one
+node "$ENGINE" set-tracker --role secondary --system github-issues --repo acme/risk-engine
+
+# Remove one that's gone stale
+node "$ENGINE" set-tracker --role secondary --system github-issues --repo acme/decommissioned-repo --remove
+```
+
+Identify a secondary entry the same way you'd identify the primary tracker — `--system` plus `--repo` or `--project`. Re-running `set-tracker --role secondary` with a matching `system` \+ `repo`/`project` merges into the existing entry instead of adding a duplicate. `--remove` against a key with no match exits non-zero and leaves `secondaryTrackers` unchanged.
+
+Once configured, the `CLAUDE.md` rules block gains one "Secondary tracker sync" section per entry, in addition to — never instead of — the primary tracker's own "External tracker sync" or "GitHub Issues" section above.
 
 ## What the TRACKER SYNC briefing line means
 
