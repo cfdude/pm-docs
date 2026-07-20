@@ -128,6 +128,12 @@ Identify a secondary entry the same way you'd identify the primary tracker — `
 
 Once configured, the `CLAUDE.md` rules block gains one "Secondary tracker sync" section per entry, in addition to — never instead of — the primary tracker's own section.
 
+## Resyncing after completion
+
+Whenever an inward-pull-capable tracker is configured — a `github-issues` primary, or any secondary tracker — the rules block also gains a "Sync after completing tracker-linked work" section: after your agent closes or transitions a tracker-linked issue as part of completing an epic, it re-syncs with your tracker(s) (`/pm:sync`) right away, since it's already doing tracker I/O for that epic. The instruction is phrased tracker-count-agnostic — "re-sync with your tracker(s)" — so it reads correctly whether a repo has one tracker configured or several.
+
+The session briefing mirrors this with a one-line, non-blocking nudge whenever any tracker is configured ("N tracker(s) configured — consider `/pm:sync` this session"). This is only ever a reminder; PM never runs a sync itself, and there's no `lastSyncedAt` tracking behind it — just a prompt for your agent to decide whether it's worth the round trip.
+
 ## TRACKER SYNC briefing line
 
 In the session briefing, the `TRACKER SYNC` line lists only epics with an active status that still lack an `externalId`. PM never fabricates transition state — it cannot see the tracker's current workflow position and will not guess at it.
