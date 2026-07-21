@@ -1,0 +1,26 @@
+---
+title: "/pm:changelog — Review What Changed Between Versions"
+sidebarTitle: "Changelog"
+description: "Show pm's own CHANGELOG entries newer than a given version — what an upgrade brought, on demand or for a specific version range."
+---
+
+`/pm:changelog` surfaces the `pm` plugin's own `CHANGELOG.md` entries that are newer than a given version, so you (and your agent) know exactly what a version brought — not just that an upgrade happened. By default the floor is the version stamped in this repo's `.conductor/state.json` (`pmVersion`).
+
+## Usage
+
+```bash
+/pm:changelog                  # entries newer than this repo's stamped pmVersion
+/pm:changelog --since 0.3.0    # everything released after 0.3.0
+```
+
+| Flag | Description |
+| --- | --- |
+| `--since <x.y.z>` | Optional. Sets the floor version explicitly instead of using the repo's stamped `pmVersion`. |
+
+## Relationship to /pm:upgrade
+
+`/pm:upgrade` already prints this same delta automatically for every version it crosses — you don't need to run `/pm:changelog` right after an upgrade to see what changed. Use `/pm:changelog` directly when you want to review the delta again later, or inspect a different version range on demand (e.g. checking what a much newer release added before deciding whether to upgrade at all).
+
+<Tip>
+  `/pm:upgrade`'s instructions now go a step further: after showing the delta, the agent reviews each `Added` headline and recommends adopting any opt-in capability relevant to your project — see the Upgrade page's "Recommending adoption of new capabilities" section.
+</Tip>
