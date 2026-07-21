@@ -1,0 +1,19 @@
+---
+title: "From Industry-Frontier Practice"
+sidebarTitle: "Industry-Frontier Practice"
+description: "PM's design choices aren't novel in isolation — they're borrowed, deliberately, from patterns that already work at scale elsewhere and adapted to an agentic coding session."
+---
+
+PM's design choices aren't novel in isolation — they're borrowed, deliberately, from patterns that already work at scale elsewhere and adapted to an agentic coding session.
+
+- **Policy-as-code, not policy-as-prose** — `/pm:gate-guard`'s reconcile-owed check is a mechanical `PreToolUse` hook, not a rule an agent might forget to re-read after compaction. Same idea as an admission controller: the guard blocks the write, it doesn't just ask nicely.
+- **Worktree isolation for parallel execution** — epic-hierarchy dispatch runs each child in its own git worktree/branch, merges sequentially, and treats the orchestrator as the sole writer of shared state — the same shape as isolating parallel CI jobs so they can't stomp on each other's output, applied to parallel _agent_ execution instead.
+- **An explicit interrupt stack, not implicit memory** — the detour stack (PUSH/POP \+ a mandatory reconcile gate on resume) is the same discipline as saving and restoring context around a hardware interrupt: the thing that got interrupted doesn't get to just "remember" — it gets re-validated before it resumes.
+- **Instruction layer, never integration layer** — the engine never opens a network connection or calls an external system itself (the one documented exception is the opt-in gate-guard hook). External work — GitHub, Jira, Honcho — is always the interactive agent's job; the engine only shapes the instructions it emits. Same separation of concerns as a scheduler that never touches the resources it schedules.
+
+## What You Can Learn
+
+- **How to make a detour genuinely resumable** — not "remember to come back to this," but a structured stack frame with a reason, a link, and a mandatory reconcile gate that a fresh agent can re-run cold.
+- **How to run multiple epics unattended without a shared-state race** — worktree isolation \+ sole-writer state transitions, discovered as a real gap during the plugin's own first live dogfood run and fixed the way you'd want any real bug fixed: in the open, with a design doc, not silently patched over.
+- **How to keep a hard architectural law honest** — "the engine never calls an external system" is enforced by review discipline, not a technical sandbox, and the CLAUDE.md constraints spell out exactly the one documented exception and why.
+- **How to turn a preflight scan into a real safety mechanism** — epic-level autonomy's decision rule (pre-authorized → proceed; no backup path → hard stop; destructive-but- restorable → warn and log; genuine unknown → stop) is designed to be followed by an agent mid-task, not just read once at the start.
