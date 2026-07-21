@@ -41,6 +41,10 @@ Running `/pm:upgrade` more than once is always safe. If your project is already 
   Always run `/reload-plugins` **before** `/pm:upgrade` when you've just installed a new version. If you skip the reload, Claude Code is still running the old plugin code, and the upgrade command will apply the old engine's logic rather than the new one. Reload first, then upgrade.
 </Warning>
 
+## Recommending adoption of new capabilities
+
+After printing the changelog delta, PM doesn't just leave you to read it — the agent reviews each `Added` headline in the "What's new in pm" output and judges whether it describes an **opt-in capability** (a new flag, a new `set-*` subcommand, a new tracker/autonomy/review-mode behavior) rather than a bug fix or a change that applies automatically with no action needed. For anything opt-in that looks relevant to your project's current `.conductor/state.json` — say, you already have a primary tracker configured but haven't added a secondary one, or you're touching schema-sensitive files without `thorough` review mode turned on — the agent recommends it in one line: what it is, why it fits, and the exact command to enable it. It never enables anything on its own; adoption is always your call. If nothing in the delta is opt-in or relevant to your project, the agent says so rather than silently skipping the review.
+
 ## /pm:changelog — Review what changed between versions
 
 `/pm:changelog` surfaces the PM plugin's own changelog entries that are newer than a given version, so you know exactly what a release brought rather than just that an upgrade happened. By default, the floor is the version stamped in your project's `.conductor/state.json` (`pmVersion`) — so running it after an upgrade shows you everything that version introduced.
