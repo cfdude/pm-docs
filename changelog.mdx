@@ -8,6 +8,19 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+## \[0.21.1\] — 2026-07-20
+
+### Added
+
+- **Security scanning via `.github/workflows/security.yml`.** Calls the two reusable `workflow_call` workflows published in `cfdude/.github` — Semgrep SAST and a Trivy filesystem scan — on push/PR to `main` and a weekly schedule, publishing SARIF results to the repo's Security tab. Both are non-blocking by design. Pinned to a commit SHA (not `@main`) to avoid a supply-chain gap where a moving branch ref could silently change what runs in CI.
+- **`SECURITY.md`** — vulnerability reporting instructions and a short architecture note.
+
+## \[0.21.0\] — 2026-07-20
+
+### Added
+
+- **CLAUDE.md rules block gains an unconditional "Feedback" section** encouraging the agent to proactively use `/pm:feedback [bug|feature] "<summary>"` (or ask the user "want me to file this as feedback?") whenever it hits a bug, a missing CLI verb, or repeated friction — instead of silently working around it. Motivated by a real gap: `/pm:feedback` shipped in 0.14.0 and was never used once, while the friction of hand-editing `.conductor/state.json` to flip a story's `done` flag (no CLI verb exists for it) recurred silently across several sessions before being reported.
+
 ## \[0.20.1\] — 2026-07-20
 
 ### Added

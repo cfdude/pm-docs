@@ -63,7 +63,8 @@
               "commands/status",
               "commands/next",
               "commands/sync",
-              "commands/upgrade"
+              "commands/upgrade",
+              "commands/changelog"
             ]
           },
           {
@@ -72,7 +73,8 @@
               "commands/epic",
               "commands/detour",
               "commands/resume",
-              "commands/hierarchy"
+              "commands/hierarchy",
+              "commands/changesets"
             ]
           },
           {

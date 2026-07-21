@@ -1,0 +1,39 @@
+---
+title: "/pm:changesets — List Pending CHANGELOG Fragments"
+sidebarTitle: "/pm:changesets"
+description: "List .changesets/*.md fragment files a hierarchy child has written, so a release can consolidate them into CHANGELOG.md without a shared-header merge conflict."
+---
+
+`/pm:changesets` lists every `.changesets/<epic-id>.md` fragment a hierarchy child has written, so whoever cuts the release can consolidate them into `CHANGELOG.md` without a shared-header merge conflict.
+
+## Why this exists
+
+A parallel multi-agent hierarchy batch (see the [Multi-Agent guide](/guides/multi-agent-hierarchy)) used to hit a 100% collision rate when every dispatched child edited `CHANGELOG.md`'s shared `## [Unreleased]` section directly. Children now write their own changelog entry to `.changesets/<epic-id>.md` instead — same bullet format `CHANGELOG.md` already uses (a bold one-line summary, then wrapped prose) — and never touch `CHANGELOG.md` themselves.
+
+## Usage
+
+```bash
+/pm:changesets
+```
+
+Prints `{ changesets: [{ id, path, body }] }`, sorted by epic id. Returns `{ changesets: [] }` if `.changesets/` doesn't exist or is empty — it never errors on a missing directory.
+
+## Consolidating at release time
+
+`/pm:changesets` is a pure read — it never writes, deletes, or concatenates on its own. To release:
+
+<Steps>
+  <Step title="Run /pm:changesets to see every pending fragment">
+    Each fragment's `body` is already in the same format `CHANGELOG.md` expects.
+  </Step>
+  <Step title="Fold each body into CHANGELOG.md">
+    Add each fragment's content to `CHANGELOG.md`'s `[Unreleased]` section, or a new version section for a version release. Whoever cuts the release is the sole writer of `CHANGELOG.md` — there's nothing to merge-conflict here even though the fragments came from parallel hierarchy-child dispatches.
+  </Step>
+  <Step title="Delete the consumed fragment files">
+    Once a fragment's content is in `CHANGELOG.md`, delete it from `.changesets/`.
+  </Step>
+</Steps>
+
+<Note>
+  `.changesets/` is a normal tracked directory, not gitignored — fragments are consumed and deleted at release time, so there's nothing sensitive or generated to hide from version control in the meantime.
+</Note>
