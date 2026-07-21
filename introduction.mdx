@@ -49,16 +49,16 @@ PM is not a replacement for OpenSpec or Superpowers. It sits deliberately above 
 
 ## Real numbers
 
-These aren't benchmarks — they're real figures pulled from PM's own `git log`, from the project that manages its own development through PM itself:
+These aren't benchmarks — they're real figures pulled mechanically from PM's own repo (`grep`/`wc`/the test runner), refreshed every release, from the project that manages its own development through PM itself:
 
 | Metric | Value |
 | --- | --- |
-| Agents dispatched through PM's multi-agent harness | **21** |
-| Releases shipped end-to-end (spec → build → test → changelog → release) | **26** |
-| Tests in the engine | **189** |
+| Releases shipped end-to-end (spec → build → test → changelog → release) | **32** |
+| Tests in the engine | **234** |
+| Lines of engine code (`scripts/conductor.mjs`) | **~2,400** |
 | External dependencies | **0** |
 
-All 21 agents ran worktree-isolated and converged back through sequential merge with zero data loss and zero unresolvable conflicts. Every conflict was mechanical (a shared CHANGELOG header, a usage string) — never a real logic collision. The engine (`scripts/conductor.mjs`) is ~2,100 lines of Node 18\+ built-ins only.
+Every multi-agent hierarchy dispatch runs worktree-isolated and converges back through sequential merge — every conflict seen so far has been mechanical (a shared CHANGELOG header, a usage string), never a real logic collision. The engine is Node 18\+ built-ins only.
 
 <Tip>
   PM manages its own development — the backlog, roadmap, and every release of PM itself run through PM. The `PROJECT.md` in the `cfdude/pm` repo is a live example of what PM produces.
