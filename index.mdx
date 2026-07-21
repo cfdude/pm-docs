@@ -1,16 +1,19 @@
 ---
-title: "PM: Epic Tracking and Detour Stack for Claude Code"
+title: "Project Manager (PM) — A Claude Code Project Management Plugin"
 sidebarTitle: "Home"
-description: "A Claude Code plugin that tracks epics with lane routing, maintains a detour stack, and enforces a reconcile gate. Zero dependencies. No lost context."
+description: "A lightweight harness above OpenSpec and Superpowers that keeps a Claude Code project on track across detours, context compaction, and multiple epics in flight."
 ---
 
-PM is the memory layer your Claude Code sessions have been missing. When context gets compacted or an interrupt derails a build, most sessions lose three things: what they were working on, what is still outstanding, and what to pick up next. PM answers all three — **mechanically, not from memory** — by tracking every epic in flight, maintaining an explicit detour stack so interruptions never lose their place, and enforcing a reconcile gate on every resume.
+**Project Manager (PM)** is a lightweight harness above [OpenSpec](https://github.com/Fission-AI/OpenSpec)
+and [Superpowers](https://github.com/obra/superpowers) that keeps a Claude Code project on
+track — across detours, context compaction, and however many epics are in flight at once.
 
-Install it once, run `/pm:init`, and it stays oriented across every context compaction. Zero npm dependencies. Pure Node 18+ built-ins.
+Install it once, run `/pm:init`, and it stays oriented across every context compaction. Zero
+npm dependencies. Pure Node 18+ built-ins.
 
 <CardGroup cols={2}>
   <Card title="Introduction" icon="circle-info" href="/introduction">
-    What PM does, why it exists, and how it fits into your workflow.
+    Why PM exists, the problem it solves, and real numbers pulled from its own history.
   </Card>
   <Card title="Installation" icon="download" href="/installation">
     Install PM from the cfdude-plugins marketplace in under a minute.
@@ -22,30 +25,6 @@ Install it once, run `/pm:init`, and it stays oriented across every context comp
     Understand epics, lanes, the detour stack, and the reconcile gate.
   </Card>
 </CardGroup>
-
-## Why PM?
-
-Every Claude Code session that spans more than one context window faces the same failure modes the moment the context is compacted or an interrupt hits:
-
-- **You lose your place mid-build.** An interrupt arrives while you're deep in an epic. There's no structured way to park it and come back — so either the interrupt wins and the epic is abandoned, or you ignore the interrupt and lose that work instead.
-- **Resume is a guess.** After a context compaction, the agent re-reads the project from scratch. Without a durable briefing, it re-derives state from conversation history — which is exactly what compaction just erased.
-- **Multi-epic priority is implicit.** When several epics are in flight, priority lives in the conversation. The moment that conversation is gone, so is the priority ordering.
-- **Parallel agents share mutable state.** Multi-agent builds that write to the same working tree produce conflicts that aren't mechanical — they're logical, and no merge driver can resolve them.
-
-PM solves all four with concrete mechanisms: **epics** (durable work units with statuses and priority), **lanes** (routing rules that determine how each epic is built), the **detour stack** (a structured PUSH/POP around any interruption), and the **reconcile gate** (a mandatory fresh-context re-validation before a paused epic can resume).
-
-## Real Numbers
-
-Not benchmarks — numbers pulled from this repo's own history, verifiable in `git log`:
-
-| Metric | Value |
-|--------|-------|
-| Agents dispatched through PM's multi-agent harness | **21** |
-| Releases shipped end-to-end (spec → build → test → changelog → bump → release) | **26** |
-| Tests | **189** |
-| npm dependencies | **0** |
-
-21 agents ran across two dogfooding batches — worktree-isolated, unattended, converging back through sequential merge with zero data loss and zero unresolvable conflicts. Every conflict was mechanical (a shared CHANGELOG header, a usage string) — never a real logic collision.
 
 ## How It Works
 
@@ -112,7 +91,7 @@ The reconcile gate is not a reminder — it is a hard `PreToolUse` block on `Edi
     A mandatory fresh-context review fires on every resume — a `PreToolUse` hard block, not a suggestion. No code is written until the gate clears.
   </Card>
   <Card title="Zero Dependencies" icon="feather">
-    The engine is pure Node 18+ built-ins (~2,100 lines). Nothing to `npm install`, ever. 189 tests, zero external packages.
+    The engine is pure Node 18+ built-ins. Nothing to `npm install`, ever. See the [Introduction](/introduction) for current test/line counts.
   </Card>
   <Card title="Session Briefing" icon="bolt">
     A `SessionStart` hook re-injects the full project briefing after every context compaction — automatically, without any manual step.
