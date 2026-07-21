@@ -14,7 +14,7 @@ description: "File a bug or feature request to the PM repo from Claude Code. Che
 ```
 
 | Subcommand | Description |
-|------------|-------------|
+| --- | --- |
 | `bug` | File a bug report against `cfdude/pm`. |
 | `feature` | File a feature request against `cfdude/pm`. |
 | `<summary>` | A concise, specific description of the issue or request. |
@@ -53,6 +53,10 @@ This is a pure agent-driven workflow. **The PM engine (`conductor.mjs`) is never
 
 `/pm:feedback` only targets `cfdude/pm`. It is not a general-purpose issue filer and should not be pointed at other repos.
 
+## Proactive adoption
+
+The CLAUDE.md rules block includes an unconditional "Feedback" section instructing your agent to use `/pm:feedback` proactively — not just when you ask for it. If it hits a bug, a missing CLI verb, an unexpected limitation, or repeated friction working with PM, it should file it (or ask you "want me to file this as feedback?") rather than silently working around it. This exists because the command shipped once and went unused: a real, recurring friction point (hand-editing `.conductor/state.json` to flip a story's `done` flag, since no CLI verb existed for it) recurred across several separate sessions before anyone reported it.
+
 <Tip>
-Include as much context as you can in the summary — what you expected, what happened, and your current PM version. You can find the version in the SessionStart briefing or in `state.json` under `pmVersion`.
+  Include as much context as you can in the summary — what you expected, what happened, and your current PM version. You can find the version in the SessionStart briefing or in `state.json` under `pmVersion`.
 </Tip>
