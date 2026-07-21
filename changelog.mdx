@@ -8,6 +8,23 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.23.0" description="2026-07-21">
+  ### Added
+
+  - **`update-epic <id> --add-story "<title>"` and `update-epic <id> --story <n> --done`.** Closes a recurring hand-edit-of-`state.json` risk for inline `stories[]` — `--add-story` appends `{ title, done: false }` (creating the array on its first inline story); `--story <n>` is 1-indexed and currently requires `--done` (the only supported mutation today) — both reject out-of-range/empty input and write nothing on failure.
+  - **`render --diff-summary`** — prints `epic-relevant: yes` or `epic-relevant: no` after rendering. The "Last rendered" timestamp and the "Recent detours" table both change PROJECT.md on nearly every render even when nothing about the epics themselves changed, forcing manual `git diff` eyeballing before every "is this safe to discard" call. `--diff-summary` normalizes both known-trivial sources away and reports whether anything else differs, making the check mechanical.
+
+  ### Fixed
+
+  - **The `conductor: engine <version> @ <path>` banner no longer prints on every single invocation in a self-hosting/dev context.** Suppressed by default whenever `CLAUDE_PROJECT_DIR` is set — set `PM_VERBOSE_ENGINE_BANNER=1` to force it back on. `PM_QUIET_ENGINE_BANNER=1` still works unchanged outside that context.
+  - **`.githooks/pre-commit` is now quiet on success** — a one-line `pre-commit: N/N passing` summary; full output (and a non-zero exit) only surfaces when a test actually fails.
+  - **`verify-worktrees` now also flags a hierarchy-child worktree whose branch is already merged, not just ones whose epic status is `archived`.** Each flagged worktree's `reasons` array lists which trigger(s) fired.
+
+  ### Changed
+
+  - **`scripts/conductor.mjs` split into `scripts/lib/*.mjs` modules — no behavior change.** The engine (2,537 lines, 85 functions) is now a 121-line entry point plus 20 focused `scripts/lib/*.mjs` modules, one per pre-existing section. Motivated by AI-agent token-efficiency, not human-readability tech debt. Purely internal — verified by all 250 pre-existing black-box tests passing unchanged throughout.
+</Update>
+
 <Update label="0.22.0" description="2026-07-20">
   ### Added
 
