@@ -55,9 +55,9 @@ These aren't benchmarks — they're real figures pulled mechanically from PM's o
 
 | Metric | Value |
 | --- | --- |
-| Releases shipped end-to-end (spec → build → test → changelog → release) | **34** |
-| Tests in the engine | **235** |
-| Lines of engine code (`scripts/conductor.mjs`) | **~2,400** |
+| Releases shipped end-to-end (spec → build → test → changelog → release) | **36** |
+| Tests in the engine | **250** |
+| Lines of engine code (`scripts/conductor.mjs` \+ `scripts/lib/*.mjs`) | **~2,700** |
 | External dependencies | **0** |
 
 Every multi-agent hierarchy dispatch runs worktree-isolated and converges back through sequential merge — every conflict seen so far has been mechanical (a shared CHANGELOG header, a usage string), never a real logic collision. The engine is Node 18\+ built-ins only.
