@@ -48,7 +48,8 @@
               "guides/multi-agent-hierarchy",
               "guides/external-trackers",
               "guides/companion-plugins",
-              "changelog"
+              "changelog",
+              "guides/mcp-server"
             ]
           }
         ]
