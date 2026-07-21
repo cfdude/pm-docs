@@ -47,7 +47,8 @@
               "guides/handling-detours",
               "guides/multi-agent-hierarchy",
               "guides/external-trackers",
-              "guides/companion-plugins"
+              "guides/companion-plugins",
+              "changelog"
             ]
           }
         ]
