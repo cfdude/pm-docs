@@ -63,3 +63,7 @@ Every multi-agent hierarchy dispatch runs worktree-isolated and converges back t
 <Tip>
   PM manages its own development — the backlog, roadmap, and every release of PM itself run through PM. The `PROJECT.md` in the `cfdude/pm` repo is a live example of what PM produces.
 </Tip>
+
+## AI-agent reference
+
+This site publishes [`llms.txt`](https://pm-plugin.dev/llms.txt) — a lightweight (~7KB) index of every doc page, meant for an AI agent to fetch on demand — and [`llms-full.txt`](https://pm-plugin.dev/llms-full.txt), the entire site as one document (~200KB, tens of thousands of tokens). Use `llms.txt` by default; reach for `llms-full.txt` only when you genuinely need the complete reference in one shot.

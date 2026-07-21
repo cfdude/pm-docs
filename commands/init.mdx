@@ -6,15 +6,19 @@ description: "Scaffold .conductor/state.json, register existing OpenSpec epics, 
 
 `/pm:init` bootstraps PM in your project. Run it once in any directory — it creates the `.conductor/` state directory, scans for existing OpenSpec proposals to register as epics, writes the managed rules block into `CLAUDE.md`, and renders the initial `PROJECT.md`. Until you run this command, all of PM's hooks stay dormant in your project, so this is always your first step.
 
+Before scaffolding, your agent should also load the `conductor` skill — the agent-facing how-to (mental model, lanes, statuses, the detour → PUSH/POP → reconcile workflow). For deeper reference beyond that skill and `README.md`, [`llms.txt`](https://pm-plugin.dev/llms.txt) is a lightweight (~7KB) index of every doc page on this site; [`llms-full.txt`](https://pm-plugin.dev/llms-full.txt) is the entire site as one document (~200KB, tens of thousands of tokens) — fetch it only if you genuinely need the complete reference, not as a default.
+
 ## What it creates
 
 <CardGroup cols={2}>
   <Card title=".conductor/state.json" icon="database">
     The single source of truth for every epic, the detour stack, tracker config, and the `pmVersion` stamp. All engine operations read and write this file.
   </Card>
+
   <Card title="CLAUDE.md rules block" icon="book-open">
     A managed section injected into your project's `CLAUDE.md` that carries the PM discipline — lanes, statuses, detour workflow, and decision rules — into every Claude Code session automatically.
   </Card>
+
   <Card title="PROJECT.md" icon="file-lines">
     A generated project briefing view rendered from `state.json`. Re-rendered on every `/pm:status`, `/pm:sync`, and `/pm:upgrade` call.
   </Card>
