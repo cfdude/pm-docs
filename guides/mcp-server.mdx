@@ -1,0 +1,100 @@
+---
+title: "Connect an AI Agent to PM's Documentation via MCP"
+sidebarTitle: "MCP Server"
+description: "PM's docs site hosts a free, no-auth search MCP server at pm-plugin.dev/mcp. Connect Claude Code, Claude, Cursor, or VS Code so your agent can search and retrieve PM documentation on demand."
+---
+
+This site hosts a search [MCP](https://modelcontextprotocol.io) (Model Context Protocol) server at `pm-plugin.dev/mcp` — free, no authentication required. Any MCP-capable AI tool can connect to it and search or retrieve PM's documentation directly, instead of relying on training data or a generic web search.
+
+<Tip>
+  This is a **search** MCP server — read-only. It lets an agent look things up in PM's docs; it does not let it edit anything or manage your project. Pair it with `llms.txt`/`llms-full.txt` (see the Introduction page) if you want an agent to load broader context up front rather than searching on demand.
+</Tip>
+
+## What it exposes
+
+Two tools, both read-only:
+
+<CardGroup cols={2}>
+  <Card title="Search" icon="magnifying-glass">
+    Semantic search across PM's docs. Returns contextual content with titles and direct links to the matching pages.
+  </Card>
+
+  <Card title="Filesystem query" icon="folder-tree">
+    Run read-only, shell-like queries (`rg`, `head`, `cat`, `tree`, etc.) against a virtualized, in-memory filesystem containing PM's docs — for exact keyword/regex matches or reading a specific page's full content by path.
+  </Card>
+</CardGroup>
+
+## Connect to Claude Code
+
+Add PM's docs as an MCP server, naming it `pm-docs` so it's clear what it's for (a documentation server, not a project-management tool):
+
+```bash
+claude mcp add --transport http pm-docs https://pm-plugin.dev/mcp
+```
+
+Add `--scope user` instead of the default (`local`, this project only) to make it available across every project on your machine:
+
+```bash
+claude mcp add --transport http --scope user pm-docs https://pm-plugin.dev/mcp
+```
+
+Verify the connection:
+
+```bash
+claude mcp list
+```
+
+You should see `pm-docs: https://pm-plugin.dev/mcp (HTTP) - ✔ Connected`.
+
+## Connect to Claude (claude.ai)
+
+<Steps>
+  <Step title="Add pm-docs as a custom connector">
+    1. Navigate to the [Connectors](https://claude.ai/settings/connectors) page in Claude settings.
+    2. Click **Add custom connector**.
+    3. Add the connector:
+       - Name: `pm-docs`
+       - URL: `https://pm-plugin.dev/mcp`
+    4. Click **Add**.
+  </Step>
+  <Step title="Use it in a chat">
+    Click the attachments button, then select `pm-docs`. Claude can now search PM's documentation while answering your prompt.
+  </Step>
+</Steps>
+
+## Connect to Cursor
+
+Add to your Cursor MCP config (Command Palette → **Open MCP settings** → **Add custom MCP**):
+
+```json
+{
+  "mcpServers": {
+    "pm-docs": {
+      "url": "https://pm-plugin.dev/mcp"
+    }
+  }
+}
+```
+
+## Connect to VS Code
+
+Create a `.vscode/mcp.json` file in your project:
+
+```json
+{
+  "servers": {
+    "pm-docs": {
+      "type": "http",
+      "url": "https://pm-plugin.dev/mcp"
+    }
+  }
+}
+```
+
+## Other AI agents and tools
+
+Any MCP client that supports HTTP transport can connect using the same URL (`https://pm-plugin.dev/mcp`) and the `pm-docs` name — the connection steps above are Claude Code-specific, but the underlying server works identically for any compliant client. This page will grow to cover more tools as they're set up against this site.
+
+<Note>
+  Connect only the MCP servers relevant to your current work, and disconnect ones you're not using — connected servers don't consume context until an agent actually calls a search tool, but keeping the list lean makes it easier for the agent to pick the right one.
+</Note>
