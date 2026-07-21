@@ -5,3 +5,8 @@
 # Draft content
 drafts/
 *.draft.mdx
+
+# Repo-cruft files not caught by Mintlify's auto-ignore list above (confirmed
+# directly reachable at pm-plugin.dev/<file> despite being excluded from nav)
+AGENTS.md
+.atlas-analysis.json
