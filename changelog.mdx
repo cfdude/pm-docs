@@ -8,6 +8,28 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.24.0" description="2026-07-30">
+  ### Added
+
+  - **Platform-aware rules block.** The managed rules block is no longer Claude-Code-only. The host agent declares itself via `--platform <claude-code|hermes|codex>` in the hook command pm authors for that platform, and the active platform is recorded in `.conductor/state.json`. pm never runs on its own — a host agent always triggers it, through a hook whose command string pm itself wrote — so the platform is _declared_, not detected: no markers, no filesystem archaeology, no precedence heuristic to get wrong.
+  - **Per-platform slash-command form**: `/pm:status` on Claude Code and Hermes, `/pm-status` on Codex. The `pm:` namespace is retained wherever supported for a concrete reason, not aesthetics — Hermes _silently skips_ a plugin command that collides with one of its built-ins, and it ships a built-in `status`, so a bare `/status` would be dropped with no signal. Codex derives command names from prompt-file stems, so it is flat and hyphenated. Every value verified against the installed CLIs rather than documentation.
+
+  ### Changed
+
+  - **The test suite is now `scripts/test/*.test.mjs` (11 files) instead of one `scripts/conductor.test.mjs`, cutting a full run from ~118s to ~46s.** Contributor-facing: the command is `node --test scripts/test/*.test.mjs`. Measured rather than guessed — one engine spawn costs ~73ms and the suite makes 676 of them, so ~49s was pure `node` startup, serialized in a single file on a 16-core machine; `node --test` parallelizes across _files_ only. The split is verbatim, verified by test-name-set equality (255 → 255). Note `node --test scripts/test` (a directory) does **not** work — Node treats the argument as a module to execute and dies with `MODULE_NOT_FOUND` while reporting "1 test".
+  - **`.githooks/pre-commit` now aborts if the suite runs fewer tests than are declared.** The glob makes a partial-suite pass possible in a way the single file never did: if a file stops matching, everything still goes green, just on a subset. The hook cross-checks the runner's count against `grep -Hc '^test('` across the files — self-maintaining, with no constant to bump as tests are added.
+
+  ### Fixed
+
+  - **The rules block is now written to the file the host platform will actually read.** Hermes resolves project context first-match-wins over `HERMES.md` \> `AGENTS.md` \> `CLAUDE.md`, so in a repo already carrying an `AGENTS.md` — from a prior Codex attempt, say — the block was _silently invisible_: no error, no warning, just an agent running without the conductor's instructions. Writing to a file a platform is _capable_ of reading is not enough; it must win that platform's precedence chain.
+  - **The auto-detour hook no longer writes a `detours.log` entry for a commit that did not land in this repo** (closes [#65](https://github.com/cfdude/pm/issues/65) and [#68](https://github.com/cfdude/pm/issues/68)). `PostToolUse` fires when the Bash tool _returns_, which is not the same as "a commit landed here." Three divergences were observed live, each writing a false line attributed to this repo's **stale HEAD**: the commit was rejected by `pre-commit` so HEAD never advanced; the commit was backgrounded and still running; or the commit landed in a _different_ repo — a paired repo, a submodule, `git -C elsewhere` — leaving our HEAD untouched. An exit-code check would have closed the first but not the second, since a backgrounded commit has no exit code yet; that is why two independently-reported issues share one fix.
+  - Comparing subjects is subtler than it looks, and getting it wrong is worse than the original bug. `git log -1 --format=%s` yields only the **first line**, while a `-m` capture spans newlines and swallows the whole message — so a naive comparison suppresses every commit that has a body, silently disabling the hook for the common case. The comparison is therefore first-line-to-first-line, and a message the shell assembled (`-m "$(…)"`, a heredoc, `-m "$MSG"`) is treated as _unverifiable_ rather than mismatched, because the command string holds the shell source rather than the text git received.
+
+  ### Migration
+
+  - `0.24.0` stamps `platform` on existing state files, defaulting to `claude-code`. Additive and idempotent; a `0.23.1` state file still loads.
+</Update>
+
 <Update label="0.23.1" description="2026-07-23">
   ### Fixed
 
