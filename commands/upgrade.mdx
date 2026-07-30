@@ -19,11 +19,13 @@ If you skip step 2, Claude Code is still executing the old plugin code and the u
 ## What it does
 
 <Steps>
-  <Step title="Refreshes the CLAUDE.md rules block">
-    The managed PM section in `CLAUDE.md` is replaced with the version shipped by the new plugin. Any content outside the managed delimiters — your own notes, other tool rules, project context — is left completely untouched.
+  <Step title="Refreshes the managed rules block">
+    The managed PM section is replaced with the version shipped by the new plugin. Any content outside the managed delimiters — your own notes, other tool rules, project context — is left completely untouched.
+
+    As of 0.24.0 the target file is platform-aware: `CLAUDE.md` on Claude Code, and on a platform that resolves project context through a precedence chain, whichever file that platform will actually read. Upgrading from a pre-0.24.0 release also migrates the block's own delimiter wording in place — detection keys on a stable prefix, so an older block is found and refreshed rather than duplicated.
   </Step>
   <Step title="Runs pending state migrations">
-    The engine applies any schema migrations needed to bring `state.json` up to the new version's format. Migrations are idempotent: if your state is already at the target schema, the migration step is skipped with no changes written.
+    The engine applies any schema migrations needed to bring `state.json` up to the new version's format. Migrations are idempotent: if your state is already at the target schema, the migration step is skipped with no changes written. The `0.24.0` migration stamps a `platform` field on repos that predate it, defaulting to `claude-code`.
   </Step>
   <Step title="Re-renders PROJECT.md">
     `PROJECT.md` is regenerated from the now-migrated `state.json`, picking up any new fields or formatting changes introduced in the new version.

@@ -46,7 +46,7 @@ PM is not a replacement for OpenSpec or Superpowers. It sits deliberately above 
 - **PM** owns cross-epic ordering, the detour stack, and reconcile links. Nothing else. Stories stay wherever they already live — PM doesn't move them or replace them.
 
 <Note>
-  PM runs exclusively in Claude Code today. Codex, Gemini CLI, Grok Build, and other `AGENTS.md`-based platforms are on the roadmap.
+  PM runs exclusively in Claude Code today. Hermes, Codex, and other `AGENTS.md`-based platforms are on the roadmap — as of 0.24.0 the engine's rules block is platform-aware groundwork for that (the host declares itself via `--platform`, and the block is written to the file that platform actually reads), but no second platform's commands or hooks ship yet.
 </Note>
 
 ## Real numbers
@@ -56,8 +56,8 @@ These aren't benchmarks — they're real figures pulled mechanically from PM's o
 | Metric | Value |
 | --- | --- |
 | Releases shipped end-to-end (spec → build → test → changelog → release) | **38** |
-| Tests in the engine | **250** |
-| Lines of engine code (`scripts/conductor.mjs` \+ `scripts/lib/*.mjs`) | **~2,700** |
+| Tests in the engine | **282** |
+| Lines of engine code (`scripts/conductor.mjs` \+ `scripts/lib/*.mjs`) | **~2,900** |
 | External dependencies | **0** |
 
 Every multi-agent hierarchy dispatch runs worktree-isolated and converges back through sequential merge — every conflict seen so far has been mechanical (a shared CHANGELOG header, a usage string), never a real logic collision. The engine is Node 18\+ built-ins only.
