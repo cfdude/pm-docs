@@ -4,23 +4,27 @@ sidebarTitle: "Home"
 description: "A lightweight harness above OpenSpec and Superpowers that keeps a Claude Code project on track across detours, context compaction, and multiple epics in flight."
 ---
 
-**Project Manager (PM)** is a lightweight harness above [OpenSpec](https://github.com/Fission-AI/OpenSpec)
-and [Superpowers](https://github.com/obra/superpowers) that keeps a Claude Code project on
-track — across detours, context compaction, and however many epics are in flight at once.
+<Frame>
+  ![Project Manager Pm Banner 1](/images/project-manager-pm-banner-1.png "Project Manager Pm Banner 1")
+</Frame>
 
-Install it once, run `/pm:init`, and it stays oriented across every context compaction. Zero
-npm dependencies. Pure Node 18+ built-ins.
+**Project Manager (PM)** is a lightweight harness above [OpenSpec](https://github.com/Fission-AI/OpenSpec) and [Superpowers](https://github.com/obra/superpowers) that keeps a Claude Code project on track — across detours, context compaction, and however many epics are in flight at once.
+
+Install it once, run `/pm:init`, and it stays oriented across every context compaction. Zero npm dependencies. Pure Node 18\+ built-ins.
 
 <CardGroup cols={2}>
   <Card title="Introduction" icon="circle-info" href="/introduction">
     Why PM exists, the problem it solves, and real numbers pulled from its own history.
   </Card>
+
   <Card title="Installation" icon="download" href="/installation">
     Install PM from the cfdude-plugins marketplace in under a minute.
   </Card>
+
   <Card title="Quick Start" icon="rocket" href="/quickstart">
     Initialize PM in your project and run your first briefing in five steps.
   </Card>
+
   <Card title="Core Concepts" icon="book" href="/concepts/epics-and-lanes">
     Understand epics, lanes, the detour stack, and the reconcile gate.
   </Card>
@@ -70,12 +74,15 @@ The reconcile gate is not a reminder — it is a hard `PreToolUse` block on `Edi
   <Card title="Handling Detours" icon="code-branch" href="/guides/handling-detours">
     Park current work, build the interrupt, and resume with confidence.
   </Card>
+
   <Card title="Multi-Agent Hierarchy" icon="diagram-project" href="/guides/multi-agent-hierarchy">
     Dispatch child epics as worktree-isolated agents that merge back cleanly.
   </Card>
+
   <Card title="External Trackers" icon="link" href="/guides/external-trackers">
     Mirror epics to Jira, Linear, or GitHub Issues without leaving Claude Code.
   </Card>
+
   <Card title="Daily Workflow" icon="calendar" href="/guides/daily-workflow">
     How a full session looks from `/pm:init` to closing the last epic.
   </Card>
@@ -87,18 +94,23 @@ The reconcile gate is not a reminder — it is a hard `PreToolUse` block on `Edi
   <Card title="Detour Stack" icon="layer-group">
     PUSH/POP your working context around any interruption. The stack survives compaction and is re-injected by the SessionStart hook on every resume.
   </Card>
+
   <Card title="Reconcile Gate" icon="shield-check">
     A mandatory fresh-context review fires on every resume — a `PreToolUse` hard block, not a suggestion. No code is written until the gate clears.
   </Card>
+
   <Card title="Zero Dependencies" icon="feather">
-    The engine is pure Node 18+ built-ins. Nothing to `npm install`, ever. See the [Introduction](/introduction) for current test/line counts.
+    The engine is pure Node 18\+ built-ins. Nothing to `npm install`, ever. See the [Introduction](/introduction) for current test/line counts.
   </Card>
+
   <Card title="Session Briefing" icon="bolt">
     A `SessionStart` hook re-injects the full project briefing after every context compaction — automatically, without any manual step.
   </Card>
+
   <Card title="Multi-Agent Dispatch" icon="network-wired">
     Run parent epics as batched, worktree-isolated child agents that converge via sequential merge. The orchestrator is the sole writer of shared state.
   </Card>
+
   <Card title="Tracker Mirroring" icon="arrows-rotate">
     Instruction-layer sync to Jira, Linear, or GitHub Issues. The engine never calls external APIs — it shapes the instructions that tell the agent to.
   </Card>
@@ -110,12 +122,15 @@ The reconcile gate is not a reminder — it is a hard `PreToolUse` block on `Edi
   <Card title="Epics and Lanes" icon="map" href="/concepts/epics-and-lanes">
     How work units are defined, routed through lanes, and prioritized.
   </Card>
+
   <Card title="Detour Stack" icon="layer-group" href="/concepts/detour-stack">
     The PUSH/POP mechanism that makes any interruption safely resumable.
   </Card>
+
   <Card title="Reconcile Gate" icon="shield-check" href="/concepts/reconcile-gate">
     The fresh-context re-validation gate that fires on every resume.
   </Card>
+
   <Card title="State and Project" icon="database" href="/concepts/state-and-project">
     How `.conductor/state.json` and `PROJECT.md` are structured and maintained.
   </Card>
@@ -127,36 +142,47 @@ The reconcile gate is not a reminder — it is a hard `PreToolUse` block on `Edi
   <Card title="/pm:init" icon="play" href="/commands/init">
     Scaffold the conductor, register epics, write the CLAUDE.md rules block.
   </Card>
+
   <Card title="/pm:status" icon="chart-bar" href="/commands/status">
     Show the current briefing: active epic, detour stack, priority queue, lane counts.
   </Card>
+
   <Card title="/pm:next" icon="forward" href="/commands/next">
     Pick the next highest-priority item, respecting the detour stack and dependency links.
   </Card>
+
   <Card title="/pm:detour" icon="code-branch" href="/commands/detour">
     Classify and handle a mid-build interruption — minimal or substantial.
   </Card>
+
   <Card title="/pm:resume" icon="rotate-right" href="/commands/resume">
     Pop the detour stack and run the reconcile gate before resuming.
   </Card>
+
   <Card title="/pm:epic" icon="list-check" href="/commands/epic">
     Register, update, or remove epics directly.
   </Card>
+
   <Card title="/pm:hierarchy" icon="diagram-project" href="/commands/hierarchy">
     Plan and dispatch a parent epic's children as a multi-agent batch.
   </Card>
+
   <Card title="/pm:sync" icon="arrows-rotate" href="/commands/sync">
     Pick up new proposals, plans, and inbound tracker issues as epics.
   </Card>
+
   <Card title="/pm:tracker" icon="link" href="/commands/tracker">
     Configure mirroring to Jira, Linear, or GitHub Issues.
   </Card>
+
   <Card title="/pm:upgrade" icon="arrow-up" href="/commands/upgrade">
     Refresh the CLAUDE.md rules block and run any pending migrations.
   </Card>
+
   <Card title="/pm:feedback" icon="comment" href="/commands/feedback">
     File a bug or feature request as a GitHub issue directly from a session.
   </Card>
+
   <Card title="All Commands" icon="terminal" href="/commands/init">
     View the full command reference including gate-guard, lane-routing, and review-mode.
   </Card>
