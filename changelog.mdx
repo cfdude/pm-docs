@@ -8,11 +8,24 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.25.2" description="2026-08-17">
+  ### Fixed
+
+  - **A help flag no longer has a side effect.** `--help` was parsed nowhere in the engine, and the usage string was only reachable from the dispatch fallback that fires for an _unknown_ subcommand — so on a **known** one, `--help` fell through and was consumed as data. `log-detour --help` wrote a real row to `.conductor/detours.log` with `--help` as the detour description. That log is append-only with no verb to remove a row, and it is what a future session reads to reconstruct what happened, so the entry was a false statement in the project's own history rather than cosmetic noise. Recovery was worse than the bug: the obvious one-liner, `head -n -1`, is a GNU extension that fails on macOS. Help flags are now handled **before dispatch**, covering every subcommand rather than the one where the damage happened to be visible — `log-detour` is simply the verb with a free-text positional in the slot `--help` lands in. A bare invocation with no subcommand also prints usage and exits 0 instead of erroring. **Worth upgrading for even if you have not noticed it**: the damage is silent and lands in a file people rarely open.
+</Update>
+
+<Update label="0.25.1" description="2026-08-17">
+  ### Fixed
+
+  - **A missing progress source now warns instead of rendering an em dash.** `bar()` rendered `—` for three different states — "this epic has no progress source", "the source exists and is empty", and "the source is missing" — so an openspec epic whose `changes/<id>/tasks.md` had moved or been deleted was indistinguishable from healthy work with nothing ticked yet. It now renders `⚠ tasks.md missing`, mirroring the plan lane's existing `⚠ planPath missing`. Two claims made while diagnosing this were themselves wrong and are worth recording: the lane did **not** render `0/0` (it rendered `—`, because `bar()` returns the em dash whenever `total === 0`), and `warn` was **not** unconsumed (`render.mjs` and `briefing.mjs` do not reference it directly, but both render progress _through_ `bar()`, which is where the consumer lives). Both were settled by rendering a real fixture rather than reading the source.
+  - **Archived epics no longer warn about a missing progress source.** Archiving is precisely when a source legitimately goes away: OpenSpec removes `changes/<id>/`, and finished plans get moved out of `docs/superpowers/plans/` — which is also how a repo stops `sync` re-registering shipped work. Measured on a 108-epic repo, **7 of the 8 epics carrying a `planPath` dangled, and all 7 were archived** with their plan correctly moved; the single one that resolved was `queued` and genuinely in flight. A warning wrong seven times out of eight trains the reader to ignore the once it is right.
+  - **`sync` no longer registers a plans directory's own index file as an epic.** Every `.md` under `docs/superpowers/plans/` was treated as a plan, so `README.md` — the file documenting what the directory is _for_ — became an untriaged epic titled after its H1, observed live as _"Superpowers Plans — Active"_. `readme.md`, `index.md` and `contributing.md` are excluded by **filename**; deciding from file contents would make registration depend on heading conventions, which is the fragility this surface already has.
+</Update>
+
 <Update label="0.25.0" description="2026-07-30">
   ### Added
 
-  - **`rules-target` — a read-only query printing the absolute path of the file the resolved platform's rules block belongs in**, walking that platform's first-match-wins chain. It deliberately does _not_ record a platform: a query must not mutate state the way `write-rules` does.
-    It exists so tooling around pm never has to mirror `PLATFORM_RULES_CHAIN`. `evals/observe.py` hardcoded `CLAUDE.md`, which 0.24.0 quietly turned into a _second_ platform seam — once the engine began writing a per-platform target, the observer reported `rules_block_present: false` for any platform whose block lands elsewhere. That is a confident wrong answer, and it would have surfaced on the first Hermes or Codex run as a parity failure that is not real. Copying the chain into Python was rejected: a second copy of platform knowledge only _moves_ the drift instead of removing it.
+  - **`rules-target` — a read-only query printing the absolute path of the file the resolved platform's rules block belongs in**, walking that platform's first-match-wins chain. It deliberately does _not_ record a platform: a query must not mutate state the way `write-rules` does. It exists so tooling around pm never has to mirror `PLATFORM_RULES_CHAIN`. `evals/observe.py` hardcoded `CLAUDE.md`, which 0.24.0 quietly turned into a _second_ platform seam — once the engine began writing a per-platform target, the observer reported `rules_block_present: false` for any platform whose block lands elsewhere. That is a confident wrong answer, and it would have surfaced on the first Hermes or Codex run as a parity failure that is not real. Copying the chain into Python was rejected: a second copy of platform knowledge only _moves_ the drift instead of removing it.
 </Update>
 
 <Update label="0.24.0" description="2026-07-30">
