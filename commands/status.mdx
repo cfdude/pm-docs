@@ -12,19 +12,70 @@ description: "Re-render PROJECT.md from state.json and display the full briefing
   <Card title="NOW" icon="circle-play">
     The active epic with its lane icon, priority badge, and live story progress derived from checkbox counts in the epic's `tasks.md` file. If no epic is active, this section prompts you to triage.
   </Card>
+
   <Card title="DETOUR STACK" icon="layer-group">
     All paused epics in LIFO order, each annotated with the reason it was pushed onto the stack. Any frame with a pending reconcile-on-resume gate is flagged with ⚠ to remind you to reconcile before resuming.
   </Card>
+
   <Card title="NEXT UP" icon="list-ol">
     The top-priority `queued` epics in P0 → P3 order. Blocked epics appear in this list but name their blocker explicitly — the dependency is surfaced rather than silently hidden.
   </Card>
+
   <Card title="LANE COUNTS" icon="chart-bar">
     A snapshot of how many epics exist across each lane (`openspec`, `superpowers`, `claude-code`, `decision`, `external`) broken down by status, so you can see the overall shape of the backlog at a glance.
   </Card>
+
   <Card title="TRACKER SYNC" icon="arrows-rotate">
-    When an external tracker is configured, this section lists any currently active epics that are missing an `externalId`. These are candidates for `/pm:sync` or manual tracker linkage.
+    Where a tracker's direction calls for it, this section lists any currently active epics that are missing an `externalId`. These are candidates for `/pm:sync` or manual tracker linkage.
+  </Card>
+
+  <Card title="UNGATED ARCHIVES" icon="triangle-exclamation">
+    Epics archived with no Gate 2 review from anyone. A **standing condition**, not an episode: it is recomputed from `state.json` at every composition and never consumed, so every session sees it until a real passing verdict supersedes it.
+  </Card>
+
+  <Card title="HANDOFFS" icon="right-left">
+    Work carried out of an archived epic, shown from **both** ends — the epic that carried it out and the epic that inherited it. A relationship visible from one side only is how a remainder disappears.
+  </Card>
+
+  <Card title="RELEASES" icon="tag">
+    Each release renders as `N epics, M deferred`, with every deliberate exclusion's reason reachable from `state.json` — so "what is in this release, and what did we cut and why" survives the session that decided it.
   </Card>
 </CardGroup>
+
+## Progress excludes lifecycle bookkeeping
+
+A task that is bookkeeping about a change's own lifecycle — above all the task that archives the change itself — carries the literal marker `{/*  pm:lifecycle  */}` on its own task line, and is excluded from progress. It renders as `· N lifecycle` beside the ratio, or `0/0 · N lifecycle` where every task is excluded.
+
+The engine infers this from nothing else: not the wording, not the commands the text names, not the position in the file. Mark it when the task source is authored **or amended**. Without the marker, the archive task counts as outstanding work forever — it cannot be ticked before the thing that ticks it — and the archive gate would demand a handoff for a change that delivered everything.
+
+## Auditing the record itself — `integrity`
+
+`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no Gate 1. An epic archived with an `ungated` Gate 2. An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to.
+
+```bash
+conductor.mjs integrity
+```
+
+Every check is reported with its count **including the ones that found nothing**, so a check that measured nothing is visibly a check that ran. It writes no state, blocks no command, and repairs nothing — each finding names the epic, and the remediation is a command you run.
+
+<Warning>
+  **On the first run after upgrading to 0.27.0, expect a burst of `heal-archived-epic-passed-gate-2`.** Every repo that followed the documented `/opsx:archive` then heal flow lands on `outcome: unknown` rather than `delivered`: the migration only stamps epics already `archived` in state, and the heal flips the rest afterwards. Expected, not a bug — each finding carries the exact remedy.
+</Warning>
+
+## Release planning — `release`
+
+A release is a named grouping of epics the agent declares: an id, intent prose, an optional target, and the epics deliberately cut from it. It exists because a release's scoping judgments otherwise survive only in the session that made them.
+
+```bash
+conductor.mjs release 0.27.0 --intent "<what this release is for>" --target <t>
+conductor.mjs release 0.27.0 --member <epicId>
+conductor.mjs release 0.27.0 --defer <epicId> --reason "<why it was cut>"
+```
+
+- **Intent prose is required to create one** — an id with no statement of what it is for is unreadable later, which is the failure this records against.
+- **Membership is one-way.** It lives on the epic as `epic.release`, at most one, and the release object carries no member list to fall out of step with it.
+- **The engine proposes nothing.** No epic is auto-assigned; adding, re-prioritizing, or archiving epics changes membership for none of them. Grouping is a scope judgment, and the scope judgment is the thing being preserved.
+- **An exclusion is not an ending.** A deferred epic keeps its status and gets no disposition of its own — it stays in the backlog because it is still work someone may do. What it loses is membership of that release.
 
 ## When to run it
 

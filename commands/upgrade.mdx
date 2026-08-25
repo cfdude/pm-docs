@@ -35,6 +35,26 @@ If you skip step 2, Claude Code is still executing the old plugin code and the u
   </Step>
 </Steps>
 
+## What 0.27.0's migration does
+
+One entry, additive, idempotent, and backward-compatible — a `state.json` written by 0.26.0 still loads, and a second run changes nothing. It reads nothing outside `state`, because a migration that consulted disk would produce a different result on a machine whose checkout sits at a different commit.
+
+| Existing | Stamped | Preserves |
+| --- | --- | --- |
+| `github-issues` primary | `direction: inward` | inward pull; outward stays suppressed |
+| Any other primary | `direction: outward` | outward create \+ transition; **no** inward pull is introduced |
+| Any secondary entry | `direction: inward` | inward pull \+ completion writeback, never outward creation |
+
+`both` would be wrong for an existing non-`github-issues` primary in the direction that costs something: a Jira tracker receives _only_ the outward section today, so `both` would grant an inward pull no repo has ever had, and `/pm:sync` would start registering an untriaged epic per open issue.
+
+**Every archived epic also gets a terminal outcome, regardless of lane** — `delivered` only where a passing Gate 2 exists, `unknown` everywhere else, both carrying `recordedBy: "migration"` so a later rule can key on which path wrote the stamp. Lane-scoping this would be wrong on measured data: of PM's own 69 archived epics only 3 are openspec-lane, so stamping one lane would leave 66 with no outcome and the outcome invariant would fail on its own repository the instant the migration ran. An existing disposition is never overwritten.
+
+<Warning>
+  **Expect a burst of `heal-archived-epic-passed-gate-2` on your first `/pm:integrity` after this upgrade.** The migration only stamps epics already `archived` in state; the archive-drift heal flips the rest to `archived` _afterwards_ and stamps them `unknown` at that moment. So every repo that followed the documented `/opsx:archive` then heal flow lands on `unknown` rather than `delivered`, by one step. That is the expected shape, not a bug. Each finding names the exact remedy — `update-epic <id> --status archived --outcome delivered --no-deferrals` — and the archive gate lets an agent replace an engine-written stamp, so nothing is stuck at `unknown`.
+</Warning>
+
+Three things about PM's emitted output also differ from 0.26.0, deliberately: the "Sync after completing tracker-linked work" reminder now leaves the rules block where no inward procedure is emitted; the briefing's `consider /pm:sync` nudge now leaves outward-only repos; and progress renders `· N lifecycle` where tasks carry the `{/*  pm:lifecycle  */}` marker. Treat a fourth as a regression.
+
 ## Idempotency
 
 Running `/pm:upgrade` more than once is always safe. If your project is already at the latest version, every step is a no-op — nothing is written, nothing is changed, and the command exits cleanly.
