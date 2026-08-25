@@ -4,7 +4,15 @@ sidebarTitle: "Sync"
 description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issues not yet tracked as epics and register them. Deduplicates automatically."
 ---
 
-`/pm:sync` scans your project for work that should be tracked as epics but isn't yet. It picks up new OpenSpec proposals and Superpowers plans found on disk, and — when a `github-issues` tracker is configured — pulls open GitHub Issues in as untriaged epics. After sync completes, PM prompts you to triage any newly registered epics: assign priorities, set statuses, and add any dependency links.
+`/pm:sync` scans your project for work that should be tracked as epics but isn't yet. It picks up new OpenSpec proposals and Superpowers plans found on disk, reconciles `openspec/changes/archive/`, and — where a tracker's `direction` includes `inward` and it names a scope to read — pulls open items in as untriaged epics. After sync completes, PM prompts you to triage any newly registered epics: assign priorities, set statuses, and add any dependency links.
+
+## The archive backfill
+
+<Info>
+  **New in 0.27.0.** `sync` also walks `openspec/changes/archive/`. An archived change the conductor holds no epic for is registered as an epic **already in `archived` status**, so the record covers what a repository actually shipped rather than only what it happened to register while the work was in flight. The audit behind 0.27.0 measured the gap: the conductor saw **49 of 87** archived changes across 8 repositories.
+
+  The backfill is visible, one-time, and announced — never a silent side effect. A state-level `archiveBackfilledAt` marker records that it happened. A backfilled epic carries `recordedBy: "archive-backfill"` on its disposition and **no gate verdict at all**: it never passed through the conductor while in flight, so writing one would assert a permanent, unclearable condition against every change archived before the conductor existed.
+</Info>
 
 ## What it registers
 
@@ -12,22 +20,33 @@ description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issu
   <Card title="OpenSpec proposals" icon="file-circle-plus">
     Any `openspec/changes/<id>/` directory not yet tracked becomes an `openspec`-lane epic registered with `status: untriaged` and `priority: P?`.
   </Card>
+
   <Card title="Superpowers plans" icon="bolt">
     Any Superpowers plan file not yet tracked becomes a `superpowers`-lane epic registered with `status: untriaged` and `priority: P?`.
   </Card>
-  <Card title="GitHub Issues" icon="github">
-    When a `github-issues` tracker is configured, open issues without a matching `externalId` become `claude-code`-lane epics. Default priority is `P2`; a `P0`, `P1`, `P2`, or `P3` label on the issue overrides the default.
+
+  <Card title="Tracker items (inward)" icon="github">
+    Where a tracker's `direction` includes `inward` and it names a scope, open items without a matching `externalUrl` become epics whose lane comes from lane routing. Default priority is `P2`; a `P0`, `P1`, `P2`, or `P3` label overrides it.
   </Card>
 </CardGroup>
 
 ## Deduplication
 
-Sync never creates duplicate epics. For OpenSpec and Superpowers sources, deduplication is by the epic's id — if an epic with that id already exists in `state.json`, the candidate is skipped silently. For GitHub Issues, deduplication is by `externalId` (the issue number): if any existing epic already carries that `externalId`, the issue is not re-registered. Re-running `/pm:sync` as many times as you like is always safe.
+Sync never creates duplicate epics. For OpenSpec and Superpowers sources, deduplication is by the epic's id — if an epic with that id already exists in `state.json`, the candidate is skipped silently. For tracker items, deduplication is by `externalUrl`, which is globally unique; a bare `externalId` is only unique within one tracker/repo, so two trackers can each hold an issue numbered `#42` without colliding. The emitted registration recipe also supplies a **derived** epic id (`<system>-<scope>-<number>`), so the same item yields the same id in every repo and session and a re-run is refused as a duplicate rather than landing under an invented slug. Re-running `/pm:sync` as many times as you like is always safe.
 
 ## When to run it
 
 Run `/pm:sync` after **pulling changes from another branch** that may have introduced new OpenSpec proposals, after **generating new proposals** in the current session, at the **start of a session** when you know new work was filed in your issue tracker since you last worked, or any time you suspect the epic index is out of date relative to disk.
 
+## Freshness: register what is new, re-read what moved
+
+Registration is only half of an inward sync. For every epic **already** linked to a tracker item, compare its `externalUpdatedAt` watermark against the item's tracker-side updated timestamp and read the ones that moved. **Seeing an item in a list response is not reading it** — listing must never advance a watermark, or sync erases the very drift it exists to find.
+
+```bash
+# a plain re-read during sync, no verdict owed
+conductor.mjs update-epic <id> --external-updated-at <iso>
+```
+
 <Note>
-  For `github-issues` sync, the engine itself only scans local files and never calls an external system directly. When `github-issues` is configured (via `/pm:tracker`), the sync process fetches open issues, deduplicates them against existing `externalId` values in `state.json`, and registers each new issue as an untriaged `claude-code`-lane epic at `P2`. Any `P0`–`P3` label present on the issue overrides the `P2` default. Configure your GitHub tracker via `/pm:tracker` before expecting issue sync to work.
+  The engine itself only scans local files and never calls an external system directly. What you do externally is decided by each tracker's `direction`, and the rules block in your project-instruction file already carries the exact steps for whichever branch applies. An **outward-only** tracker (or one that names no scope) means sync reads nothing external — it registers local OpenSpec/Superpowers sources and stops, and its confirmation line says so.
 </Note>

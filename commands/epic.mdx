@@ -63,12 +63,71 @@ Change any field on an existing epic with `update-epic`. The id is positional.
 
 ```bash
 conductor.mjs update-epic <id> \
-  [--title <title>] [--status <status>] [--priority <P?>] \
-  [--parent <id>] [--external-id <KEY>] [--external-url <url>] \
-  [--link "<type>:<epic>[:<reason>]"] [--review-mode off|standard|thorough]
+  [--title <title>] [--status <status>] [--priority <P?>] [--lane <lane>] \
+  [--plan <path>] [--parent <id>] [--external-id <KEY>] [--external-url <url>] \
+  [--link "<type>:<epic>[:<reason>]"] [--clear-links] \
+  [--description "<why>"] [--notes "<what>"] \
+  [--external-updated-at <iso>] [--review-mode off|standard|thorough]
 ```
 
-All validations from `add-epic` apply: no self-parent, no cycles, known status values, and referenced epic ids must exist. On an unknown id or any invalid flag value, the command exits non-zero and writes nothing.
+All validations from `add-epic` apply: no self-parent, no cycles, known status values, and referenced epic ids must exist. On an unknown id or any invalid flag value, the command exits non-zero and writes nothing — including an unrecognized flag name, which used to silently no-op and print a false "updated" success.
+
+**The whole flag surface.** `update-epic` accepts 24 flags, declared once in `EPIC_FLAGS` — the same declaration `add-epic`'s and `add-many`'s surfaces are projected from, so the three cannot drift apart. Beyond the shape above:
+
+| Flag | Writes | Notes |
+| --- | --- | --- |
+| `--lane` | `lane` | Re-routes an epic in place. |
+| `--plan` | `planPath` | Attaches a plan to an epic created without one. |
+| `--clear-links` | `links` | The named way to empty the array; may not be combined with `--link`. |
+| `--description` | `description` | Durable rationale — why this epic exists. Replaced wholesale on each set. |
+| `--notes` | `notes` | Append-only trail of `{at, actor, text}`. Reads as activity. |
+| `--external-updated-at` | `externalUpdatedAt` | The **tracker's own** timestamp, never a local clock reading. |
+| `--attribute-commit` | `attributedCommits` | **Repeatable**, append-only, in landing order. |
+| `--outcome` | `disposition` | `delivered`, `killed`, `superseded`, or `abandoned`. |
+| `--reason` | `disposition` | Required for every outcome except `delivered`. |
+| `--carried-to` | `disposition` | Where unfinished work went. |
+| `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`. |
+| `--declined-deferral` | `deferralAssertion` | **Repeatable** — `"<what>:<why not>"`. |
+| `--no-deferrals` | `deferralAssertion` | The explicit "there are none". |
+
+`--lane` and `--plan` were settable only at creation, so the sole correction for a mis-routed epic was to remove it and register it again — discarding its start time, its gate verdicts, its links and its stories. Both are now in-place field writes.
+
+`--description` and `--notes` are distinct and neither substitutes for the other: a description says why the epic exists and what would make it worth revisiting; notes are a trail of what happened. Stories used to be the only free-text carrier an epic had, which is why four epics in the 0.27.0 audit archived with "incomplete" stories that were actually completion notes.
+
+## Attributing commits
+
+```bash
+conductor.mjs update-epic <id> --attribute-commit <sha>
+```
+
+The engine infers attribution from **nothing** — not the files a commit touches, not an epic id in a message — so an unattributed commit is one the epic's Gate 2 cannot be checked against. The flag repeats because a non-repeatable flag is overwritten on each occurrence, which would silently turn two hashes into one and destroy the order that gives the array its meaning.
+
+Catch up on work already in flight **only before the first attribution**, in landing order; after that, attribute forward only. The array is append-only, and its **last** entry is what a recorded Gate 2 `headSha` is compared against — so a late-inserted ancestor reads as a stale verdict and refuses the archive.
+
+<Warning>
+  **Never attribute the commit that moves `openspec/changes/<id>/` under `archive/`**, or any commit that only relocates or deletes a change's artifacts. That move lands after the reviewed range by construction, so attributing it makes the epic's own Gate 2 stale at the instant the archive gate reads it.
+</Warning>
+
+## Ending an epic — the disposition
+
+An epic, a story, a deferral, or a release exclusion **ends by recording a terminal disposition carrying its required reason — never by removing the record.** Deletion removes the record of projected work, which is precisely what a disposition exists to preserve.
+
+The archive verb takes two halves in one invocation, because the gate refuses either half alone:
+
+```bash
+conductor.mjs update-epic <id> --status archived \
+  --outcome delivered|killed|superseded|abandoned \
+  --reason "<why>" \
+  --no-deferrals
+```
+
+`--no-deferrals` is the explicit "there are none" and is a claim, not a default — swap it for `--deferral "<epicId>:<section>"` where work is now held by a registered epic, or `--declined-deferral "<what>:<why not>"` where you are deliberately not doing it. The engine does not read your artifacts and will not guess.
+
+The gate also refuses to archive an `openspec`-lane epic as `delivered` without a passing, **non-stale** Gate 2, and demands `--carried-to <epicId> --reason "<which tasks moved>"` where outstanding work remains. `killed`, `superseded`, and `abandoned` are exempt from both demands by design: the code was never written or was thrown away, and the required reason already answers where the work went.
+
+An **engine-written** disposition — the migration's stamp, the archive-drift heal's — may be replaced by an agent recording a real one. Another agent's recorded judgment may not; correcting a mistaken disposition is not something this verb does.
+
+`remove-epic` stays available and ungated for what it is actually for: an epic registered in error, a duplicate, a mistake made a minute ago — where there is no disposition to record because there was no work.
 
 **`--link` replaces the epic's links wholesale** — unlike the other flags, which patch a single field, passing `--link` discards all existing links and stores only the ones you provide in this call. This is the intended path for fixing a malformed link without touching `state.json` directly. Pass every link you want the epic to have; omitting `--link` entirely leaves existing links untouched.
 
@@ -88,7 +147,7 @@ conductor.mjs remove-epic <id> [--cascade]
 - If the removed epic was the active epic, the `.active` pointer is cleared automatically.
 
 <Warning>
-`remove-epic` is a hard delete — recoverable only via `git history`. Before using `--cascade`, review the blast-radius table that the blocked attempt prints and confirm explicitly. The engine has no interactive prompt; that confirmation step is your responsibility.
+  `remove-epic` is a hard delete — recoverable only via `git history`. Before using `--cascade`, review the blast-radius table that the blocked attempt prints and confirm explicitly. The engine has no interactive prompt; that confirmation step is your responsibility.
 </Warning>
 
 ## Setting the active epic
@@ -123,6 +182,19 @@ conductor.mjs set-autonomy <id> \
 
 All of `--preauthorize`, `--context`, and `--notify` are **additive** — re-running `set-autonomy` on the same epic appends to the existing entries and never clobbers them. Only `--level` replaces.
 
+## Recording a gate verdict
+
+```bash
+conductor.mjs record-gate-review <id> --gate 1|2 --verdict pass|fail \
+  --base-sha "<a>" --head-sha "<b>" --reviewer "<identity>"
+```
+
+`--base-sha`/`--head-sha` record the commit range the review actually covered, and `--reviewer` records who performed it — **as fields, not as prose in a note.** A review of `a..b` on an epic that later shipped `b..c` used to be byte-identical in `state.json` to one that covered everything; recorded as fields, the range is what later tells a covering verdict from a **stale** one.
+
+Verdicts recorded before these fields existed carry a free-text `note` instead. They load unchanged and are reported as carrying no checkable evidence — never deleted, never rewritten, never mined for a range by parsing that note.
+
+An archive that reached `archived` with no review at all records **`verdict: "ungated"`** rather than nothing. That is a standing condition, surfaced by the briefing and by `integrity` until a real passing verdict supersedes it — and the superseded entry is kept, not destroyed.
+
 <Note>
-`update-epic --status archived` on an `openspec`-lane epic requires a passing Gate 2 verdict already recorded via `record-gate-review`. If the verdict is missing or `fail`, the transition is rejected with a clear error naming what's missing. Non-openspec epics are unaffected by this check.
+  `update-epic --status archived --outcome delivered` on an `openspec`-lane epic requires a passing, non-stale Gate 2 verdict already recorded via `record-gate-review`. If it is missing, `fail`, `ungated`, or stale, the transition is rejected with a clear error naming what's missing. As of 0.27.0 this gate binds **every** path that can reach `archived` — including the archive-drift heal reached from `upgrade`, `render`, the commit nudge, and `sync` — not just this verb. Non-openspec epics are unaffected.
 </Note>

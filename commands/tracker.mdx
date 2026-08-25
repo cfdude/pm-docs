@@ -40,6 +40,7 @@ conductor.mjs set-tracker \
 | `--project` | The project key your epics belong to, such as `PROJ` or `JOB`. |
 | `--mechanism` | How your agent calls the tracker — `mcp`, `cli`, `api`, or any other label. |
 | `--intent` | Repeatable. Maps a PM lifecycle status to a semantic tracker target (see below). |
+| `--direction` | `inward`, `outward`, or `both` — which way work flows. Explicit configuration, never inferred from the vendor. A **new** primary defaults to `inward`. |
 
 Re-running `set-tracker` merges — only the flags you pass change. The `CLAUDE.md` rules block is refreshed automatically.
 
@@ -65,9 +66,33 @@ A fully configured tracker block in `state.json` looks like this:
 }
 ```
 
-## Bidirectional mirroring (Jira, Linear, etc.)
+## Direction decides what PM emits — not the vendor
 
-For any `--system` other than `github-issues`, the `CLAUDE.md` rules block instructs your agent to:
+<Warning>
+  **Behavior change in 0.27.0.** Direction used to be inferred from the tracker's vendor: `github-issues` was hardcoded inward-only and every other system got the outward mirror. It is now an explicit `direction` recorded on the tracker entry, and that value is what every emitter reads.
+
+  **A new primary tracker registered without `--direction` now defaults to `inward`, whatever the vendor.** `set-tracker --system jira --project PROJ` produced the outward mirror in 0.26.0 and produces the inward pull in 0.27.0. Outward creation of issues in someone else's tracker is the consequential default and has to be chosen, not inherited. The whole remedy is one line:
+
+  ```bash
+  conductor.mjs set-tracker --system jira --direction outward
+  ```
+
+  **Existing repos are unaffected.** `/pm:upgrade` stamps each tracker with the direction it already behaves with — `github-issues` primary to `inward`, any other primary to `outward`, every secondary to `inward` — and an explicitly set value is never overwritten.
+</Warning>
+
+| `direction` | What the rules block and the briefing tell your agent to do |
+| --- | --- |
+| `inward` | List open items in the tracker's scope and register the new ones as untriaged epics, deduped by `externalUrl`. |
+| `outward` | Create a tracker issue for any epic lacking `externalId`, then transition it in step with the epic's status. |
+| `both` | Both sections are emitted. |
+
+A secondary tracker is **pinned to `inward`** — it is pull-only by definition, so `--role secondary --direction outward` is refused. An unrecognized value exits non-zero and writes nothing. A tracker with no recorded `direction` keeps the behavior its vendor produced before direction existed, whether or not the repo has been through `/pm:upgrade`.
+
+Direction alone does not turn a section on: **an inward section is emitted only when the tracker also names a scope to read** — a `repo` for `github-issues`, a `repo` or `--project` for anything else. A tracker naming no scope gets no inward section, because PM may not emit a command line with an unfilled placeholder.
+
+## Outward mirroring
+
+Where direction includes `outward`, the `CLAUDE.md` rules block instructs your agent to:
 
 1. **Create an issue** for any epic that lacks an `externalId`, then record the returned key:
    ```bash
@@ -76,9 +101,9 @@ For any `--system` other than `github-issues`, the `CLAUDE.md` rules block instr
 2. **Transition the issue** toward the `statusIntent` target each time the epic's status changes — resolving the real workflow transition with your own tooling.
 3. **Link child epics** to a parent tracker epic when a hierarchy is involved.
 
-## GitHub Issues (inward-only)
+## Inward pull, worked through on GitHub Issues
 
-`--system github-issues` is a special, inward-facing shape. Instead of mirroring local epics out to GitHub Issues, it pulls open GitHub Issues **in** as new untriaged epics during `/pm:sync` — the same pattern PM uses to auto-register OpenSpec changes found on disk.
+Any tracker whose direction includes `inward` pulls open items **in** as new untriaged epics during `/pm:sync` — the same pattern PM uses to auto-register OpenSpec changes found on disk. `github-issues` is not special here; it is simply the one system whose CLI PM can name concretely, so it makes the clearest example. Every other system receives the same steps phrased as "list open items in `<system>` (`<scope>`) with your own tooling".
 
 ```bash
 conductor.mjs set-tracker --system github-issues --repo owner/name
@@ -87,20 +112,25 @@ conductor.mjs set-tracker --system github-issues --repo owner/name
 During `/pm:sync`, your agent:
 
 1. Lists open issues with `gh issue list --repo <repo> --state open --json number,title,url,labels`.
-2. Checks whether an epic already has that issue number as its `externalId` — if so, skips it.
-3. Registers each new issue as an epic:
+2. Checks whether an epic already carries that item's `externalUrl` — if so, skips it. `externalUrl` is globally unique; a bare `externalId` is only unique within one tracker/repo.
+3. Registers each new issue as an epic, using the recipe the rules block emits — which **runs as written**:
    ```bash
-   conductor.mjs add-epic --status untriaged \
+   conductor.mjs add-epic --id <derived> --status untriaged \
      --external-id <issue-number> \
      --external-url <issue-url> \
-     --lane claude-code \
+     --external-updated-at <iso> \
+     --lane <lane> \
      --title "<issue-title>" \
      --priority P2
    ```
    If the issue carries a `P0`/`P1`/`P2`/`P3` label, use that label's priority instead of the `P2` default.
-4. `add-epic` itself rejects a duplicate `--external-id` (exits non-zero, writes nothing) as a second line of defense against a stale local view producing a duplicate.
+4. `add-epic` itself rejects a duplicate (exits non-zero, writes nothing) as a second line of defense against a stale local view producing one.
 
-`github-issues` does **not** auto-create GitHub Issues for local epics. That direction is intentionally omitted to avoid silently creating public issues on your behalf.
+Three things about that recipe are deliberate:
+
+- **`--id` is derived, not invented** — `<system>-<scope>-<number>`, so the same item yields the same epic id in every repo and every session, and a re-run is refused as a duplicate rather than landing under a slug the agent made up from the title. Back when the emitted recipe omitted the required `--id`, two sessions hit exactly that failure the same afternoon.
+- **`<lane>` comes from lane routing** (`suggest-lane "<issue-title>"`), never a hardcoded `claude-code`. The lane decides whether the work leaves any spec, plan, or gate record — hardcoding it decided that silently for every mirrored item. Override where routing is wrong and record why with `update-epic <id> --notes "..."`.
+- **`--external-updated-at`** carries the item's own updated timestamp, so a freshly mirrored epic starts with a freshness watermark instead of immediately polluting the "never re-read" count.
 
 ## Primary \+ secondary trackers
 
@@ -108,8 +138,8 @@ A repo has exactly one **primary** tracker — everything above — plus, option
 
 A secondary tracker gets exactly two behaviors:
 
-1. **Inward pull** — open issues become untriaged epics, the same shape as the `github-issues` inward sync above, but deduped by `externalUrl` (globally unique) rather than bare `externalId` (only unique within one tracker/repo — two secondary trackers can each have an issue numbered `#42` without colliding).
-2. **Completion status writeback** — when an epic sourced from a secondary tracker reaches `archived`, your agent closes the linked issue there too. This is new: even the inward-only `github-issues` case above never did this before.
+1. **Inward pull** — open issues become untriaged epics, the same shape as the inward pull above, deduped by `externalUrl` (globally unique) rather than bare `externalId` (only unique within one tracker/repo — two secondary trackers can each have an issue numbered `#42` without colliding).
+2. **Completion status writeback** — when an epic sourced from a secondary tracker reaches `archived`, your agent closes the linked issue there too.
 
 A secondary tracker **never** gets outward-created issues. That direction stays exclusive to the primary tracker.
 
@@ -130,9 +160,28 @@ Once configured, the `CLAUDE.md` rules block gains one "Secondary tracker sync" 
 
 ## Resyncing after completion
 
-Whenever an inward-pull-capable tracker is configured — a `github-issues` primary, or any secondary tracker — the rules block also gains a "Sync after completing tracker-linked work" section: after your agent closes or transitions a tracker-linked issue as part of completing an epic, it re-syncs with your tracker(s) (`/pm:sync`) right away, since it's already doing tracker I/O for that epic. The instruction is phrased tracker-count-agnostic — "re-sync with your tracker(s)" — so it reads correctly whether a repo has one tracker configured or several.
+Where at least one configured tracker has an **emittable inward procedure** — its direction includes `inward` _and_ it names a scope to read — the rules block also gains a "Sync after completing tracker-linked work" section: after your agent closes or transitions a tracker-linked issue as part of completing an epic, it re-syncs with your tracker(s) (`/pm:sync`) right away, since it's already doing tracker I/O for that epic. The instruction is phrased tracker-count-agnostic — "re-sync with your tracker(s)" — so it reads correctly whether a repo has one tracker configured or several.
 
-The session briefing mirrors this with a one-line, non-blocking nudge whenever any tracker is configured ("N tracker(s) configured — consider `/pm:sync` this session"). This is only ever a reminder; PM never runs a sync itself, and there's no `lastSyncedAt` tracking behind it — just a prompt for your agent to decide whether it's worth the round trip.
+The session briefing mirrors this with a one-line, non-blocking nudge on the same condition. This is only ever a reminder; PM never runs a sync itself, and there's no `lastSyncedAt` tracking behind it — just a prompt for your agent to decide whether it's worth the round trip.
+
+<Note>
+  **Changed in 0.27.0.** Both used to fire more widely — the reminder appeared in every rules block that had a tracker at all, citing "the writeback steps above" that the same block never emitted, and the briefing's nudge appeared whenever any tracker existed. An outward-only repo now gets neither.
+</Note>
+
+## Freshness and the refresh gate
+
+A tracker-linked epic carries `externalUpdatedAt` — the **tracker's own** updated timestamp as of the last time your agent actually read that item. Seeing it in a list response is not reading it: advancing the watermark from a listing erases the drift the watermark exists to find.
+
+Before an epic becomes the active piece of work, its source of truth gets re-read and the obligation is cleared with:
+
+```bash
+conductor.mjs record-tracker-refresh <id> \
+  --verdict unchanged|material-change \
+  --external-updated-at <iso> \
+  --summary "<what changed>"
+```
+
+The gate keys on **provenance** — does this epic have an external origin — never on direction. An issue filed by a third party and an epic born from a local spec have different sources of truth in the same repo on the same day. An epic with no `externalId` re-reads its local source (its plan, or its proposal plus tasks) and `record-tracker-refresh` refuses it by name.
 
 ## TRACKER SYNC briefing line
 
