@@ -1,0 +1,63 @@
+---
+title: "/pm:triage — Screen an Ask Against the Backlog Before It Becomes an Epic"
+sidebarTitle: "Triage"
+description: "PM has always accepted work; it did not triage it. Dedup was identity-only, so the same ask under a different name always landed twice. Triage surfaces the twin first."
+icon: "filter"
+---
+
+Run this **before `add-epic`**, every time an ask arrives — an issue you are about to mirror, a request in conversation, a line off a roadmap doc.
+
+## The gap it closes
+
+The conductor has always **accepted** work. It did not **triage** it. `add-epic` validates the id, the lane and the priority, refuses a duplicate `externalId`, and appends.
+
+The only dedup that existed was **identity-based** — same id, or same `externalUrl`. That correctly stops `/pm:sync` from mirroring one issue twice, and it does nothing at all about _the same ask arriving under a different name_. That failure has exactly one symptom: **the backlog only ever grows, and every entry looks equally legitimate.**
+
+<Note>
+  Measured in PM's own repository: the `change-registered-under-two-lanes` integrity check reports **four live pairs** that are one change registered twice, under different lanes and different names. Identity dedup found none of them. A human reading the backlog did.
+</Note>
+
+## Getting the candidate set
+
+```bash
+conductor.mjs triage "<the ask, in its own words>"
+```
+
+`--limit N` (default 5) bounds how many candidates come back. It must be a positive integer — a valueless or non-numeric `--limit` is **refused rather than coerced**, and any other flag is rejected by name. A wrong bound on a recall device silently hides the twin the whole command exists to surface.
+
+## The engine computes candidates and never a verdict
+
+This is the line the whole design turns on, and the command states it in its own output: **`verdict` is always `null`.**
+
+| The engine decides (mechanical) | You decide (judgment) |
+| --- | --- |
+| which epics share **distinctive** vocabulary with the ask | whether one of them is **the same ask** |
+| which lane the repo's routing rules pick | whether that lane is right _here_ |
+| the backlog's shape as a set — counts, what's active | where this sits against what's in flight |
+| which candidates are already `superseded` | consolidate, decline, or register |
+
+PM is an instruction layer. An engine that decided two asks were "the same" would be making a semantic judgment on prose, which is exactly the thing it must not do — so it hands you a ranked, auditable candidate set and stops.
+
+## Why the ranking has no stoplist
+
+Scoring is **IDF over the backlog itself** — `ln((N+1)/df)`. A term's weight comes from how rare it is _in your own epics_, so house vocabulary self-neutralizes: "Implementation Plan" in a title does not drag half the index in, and nobody maintains a curated stopword list that goes stale.
+
+Every candidate carries **the tokens that earned its score**. That is what makes a lexical surface auditable rather than an oracle — you can see at a glance that a match is real, or that it rode in on one shared word.
+
+<Warning>
+  Triage is **not** a substitute for the `externalUrl` check during sync, and that check is not a substitute for triage. They catch different things: identity dedup stops the same _item_ landing twice; triage surfaces the same _ask_ under a different name. Run both.
+</Warning>
+
+## Declining an ask
+
+An ask you screen and decide against ends the way all work in PM ends — with a recorded disposition carrying its reason, never by deletion:
+
+```bash
+conductor.mjs update-epic <id> --status archived --outcome declined --reason "<why not>" --no-deferrals
+```
+
+`declined` is a terminal **outcome**, not a status — `archived` already means terminal, so nothing about status-driven behavior changes. It records that a judgment was made, which is precisely what deletion destroys.
+
+<Card title="Epics & Lanes" icon="layers" href="/concepts/epics-and-lanes">
+  What happens to an ask once you decide to register it.
+</Card>
