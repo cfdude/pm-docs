@@ -66,6 +66,7 @@
               "commands/status",
               "commands/next",
               "commands/sync",
+              "commands/triage",
               "commands/upgrade",
               "commands/changelog"
             ]
