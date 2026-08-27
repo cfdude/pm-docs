@@ -18,7 +18,11 @@ description: "Re-render PROJECT.md from state.json and display the full briefing
   </Card>
 
   <Card title="NEXT UP" icon="list-ol">
-    The top-priority `queued` epics in P0 → P3 order. Blocked epics appear in this list but name their blocker explicitly — the dependency is surfaced rather than silently hidden.
+    The top-priority `queued` epics, ordered by **effective priority** — an epic inherits the best priority of everything that transitively depends on it, so a P1 blocked by a backlog P2 lifts that P2 into view instead of starving behind it. Renders as `P2 → P1`; never written to state. `reorder` sets a manual rank as the final tie-break.
+  </Card>
+
+  <Card title="DEPENDENCY WARNINGS" icon="link-slash">
+    An epic that is `blocked` with no live `depends-on` edge, or a dependency inversion — naming both endpoints, both statuses, and the lift. Rendered in `PROJECT.md` as well as the brief, because `/pm:next` reads `PROJECT.md` and would otherwise never see them.
   </Card>
 
   <Card title="LANE COUNTS" icon="chart-bar">
@@ -54,7 +58,7 @@ The engine infers this from nothing else: not the wording, not the commands the 
 
 ## Auditing the record itself — `integrity`
 
-`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no Gate 1. An epic archived with an `ungated` Gate 2. An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to.
+`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A recorded commit sha the repository can no longer resolve — orphaned by a squash-merge and due for deletion at the next `gc`, or already gone. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no Gate 1. An epic archived with an `ungated` Gate 2. An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to.
 
 ```bash
 conductor.mjs integrity
