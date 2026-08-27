@@ -55,6 +55,28 @@ One entry, additive, idempotent, and backward-compatible — a `state.json` writ
 
 Three things about PM's emitted output also differ from 0.26.0, deliberately: the "Sync after completing tracker-linked work" reminder now leaves the rules block where no inward procedure is emitted; the briefing's `consider /pm:sync` nudge now leaves outward-only repos; and progress renders `· N lifecycle` where tasks carry the `{/*  pm:lifecycle  */}` marker. Treat a fourth as a regression.
 
+## Is OpenSpec current, and is this project current with it?
+
+`pm` and `superpowers` are plugins — they update themselves, and PM already nudges when a repo's stamped version lags the installed one. **OpenSpec is a CLI you upgrade by hand**, and `openspec update` — which regenerates the per-project instruction files, slash commands and skills the whole OpenSpec lane runs on — is a _separate_, manual, per-project step. So a machine can sit on OpenSpec 1.10 while a project still runs 1.6's generated artifacts, indefinitely, with nothing anywhere saying so.
+
+Measured in PM's own repository: **four minor versions stale**, while actively running an OpenSpec change, with two upstream slash commands its agents could not know existed.
+
+As of 0.28.0 both `/pm:upgrade` and the `SessionStart` briefing report that drift, from one shared emitter so the two surfaces can never disagree.
+
+<Steps>
+  <Step title="It never runs openspec update for you">
+    PM emits the instruction; you run the terminal command — exactly as with `openspec init`. This is the instruction-layer law, and it is enforced mechanically: a source scan in the test suite fails the build if any engine file ever passes the `openspec` binary an argv other than `--version`.
+  </Step>
+  <Step title="It holds mid-change instead of suppressing itself">
+    `openspec update` rewrites the very instruction files an in-flight change is being authored against. So with an active change the drift is still reported, but the imperative becomes **hold until that change is archived**, naming it. Suppressing the nudge outright would silence it permanently in any repo that usually has a change open — which is precisely how the four-version drift above accumulated unseen.
+  </Step>
+  <Step title="It tells you whether a diff will exist">
+    Where the generated files are git-tracked, `git diff` after the run **is** your review. Where they are not tracked — or where that cannot be confirmed — the nudge tells you to copy them aside first, because the rewrite destroys local edits to your generated OpenSpec skills with no diff and no trace. Tracked-ness is scoped to _this_ project even when it sits inside a larger repository.
+  </Step>
+</Steps>
+
+Either version being undeterminable is reported as **cannot tell**, never as stale — the same third answer PM's ancestry checks give. And nothing is spawned at all unless the repo has an `openspec/` directory _and_ a readable generated stamp, so a project that does not use OpenSpec never pays for the check.
+
 ## Idempotency
 
 Running `/pm:upgrade` more than once is always safe. If your project is already at the latest version, every step is a no-op — nothing is written, nothing is changed, and the command exits cleanly.
