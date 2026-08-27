@@ -38,7 +38,11 @@ description: "Re-render PROJECT.md from state.json and display the full briefing
   </Card>
 
   <Card title="RELEASES" icon="tag">
-    Each release renders as `N epics, M deferred`, with every deliberate exclusion's reason reachable from `state.json` — so "what is in this release, and what did we cut and why" survives the session that decided it.
+    Each release renders as `N epics, M deferred`, with every deliberate exclusion's reason reachable from `state.json` — so "what is in this release, and what did we cut and why" survives the session that decided it. A release holding two or more spec files also carries its [cross-spec review](/commands/cross-spec-review) state: `fresh`, `⚠ stale`, `⚠ unverifiable`, or `⚠ no cross-spec review (N specs)`.
+  </Card>
+
+  <Card title="TOOL CURRENCY" icon="wrench">
+    Where the project uses OpenSpec, whether the installed CLI and this project's generated artifacts agree. `pm` and `superpowers` update themselves; OpenSpec is upgraded by hand and `openspec update` is a separate per-project step — see [`/pm:upgrade`](/commands/upgrade).
   </Card>
 </CardGroup>
 

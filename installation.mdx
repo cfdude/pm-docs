@@ -4,12 +4,12 @@ sidebarTitle: "Installation"
 description: "Install the PM project-management plugin from the cfdude-plugins marketplace. Requires Node 18+ and Claude Code. No npm install needed."
 ---
 
-PM is distributed via the `cfdude-plugins` marketplace and requires no `npm install` — the engine is zero-dependency by hard rule. The entire conductor (`scripts/conductor.mjs`) is ~2,100 lines of Node 18+ built-ins, so there is nothing to install beyond the plugin itself. Add the marketplace, install the plugin, and you're ready to initialize your first project.
+PM is distributed via the `cfdude-plugins` marketplace and requires no `npm install` — the engine is zero-dependency by hard rule. The whole engine (`scripts/conductor.mjs` plus `scripts/lib/*.mjs`) is ~6,700 lines of Node 18\+ built-ins, so there is nothing to install beyond the plugin itself. Add the marketplace, install the plugin, and you're ready to initialize your first project.
 
 ## Prerequisites
 
 <Info>
-  **Node 18+** is required to run the conductor engine. If you're already using OpenSpec or Superpowers, Node 18+ is almost certainly present. **Claude Code** is the only supported platform today — Codex, Gemini CLI, and other platforms are on the roadmap.
+  **Node 18\+** is required to run the conductor engine. If you're already using OpenSpec or Superpowers, Node 18\+ is almost certainly present. **Claude Code** is the only supported platform today — Codex, Gemini CLI, and other platforms are on the roadmap.
 </Info>
 
 ## Installation steps
@@ -61,17 +61,20 @@ PM works completely standalone — install it, run `/pm:init`, and you immediate
     cd your-project && openspec init
     ```
   </Card>
+
   <Card title="Superpowers" icon="bolt" href="https://github.com/obra/superpowers">
-    **Execution discipline.** Superpowers drives brainstorming, TDD, subagent-driven development, and code review. PM tracks *when* and *in what order* an epic gets built; Superpowers drives *how well*.
+    **Execution discipline.** Superpowers drives brainstorming, TDD, subagent-driven development, and code review. PM tracks _when_ and _in what order_ an epic gets built; Superpowers drives _how well_.
 
     ```bash
     /plugin marketplace add anthropics/claude-plugins-official
     /plugin install superpowers@claude-plugins-official
     ```
   </Card>
+
   <Card title="Honcho" icon="brain" href="https://docs.honcho.dev">
     **Durable memory across sessions and repos.** PM's detour stack is the live working set for one project; Honcho is where a PUSH/POP memory line goes so the relationship between projects — and between sessions — survives a compaction, a new machine, or a week away. See [docs.honcho.dev](https://docs.honcho.dev) for setup.
   </Card>
+
   <Card title="PM (standalone)" icon="check-circle">
     **No companions required.** PM installs and initializes on its own. Each companion adds a layer PM intentionally doesn't own — but skipping them loses nothing from PM's core: priority ordering, the detour stack, and the reconcile gate all work without them.
   </Card>
@@ -91,3 +94,21 @@ When PM releases a new version, the `SessionStart` briefing will tell you that a
 <Warning>
   Always run `/reload-plugins` **before** `/pm:upgrade` whenever you've updated the plugin itself (not just a project init). Running `/pm:upgrade` against a stale plugin cache can apply the wrong migration. The `SessionStart` briefing explicitly tells you when a reload is needed — watch for it at the start of your session.
 </Warning>
+
+## Contributing to PM itself
+
+**If you are using PM on your own projects, there is nothing in this section for you.** Everything above is the complete setup. This one is for people who want to work on PM's own source.
+
+PM's repository is managed by the plugin it ships — PM dogfoods itself — and that creates exactly one problem you have to solve before your first commit. Every hook and slash command PM ships invokes the engine through `CLAUDE_PLUGIN_ROOT`, which resolves to the **installed** plugin. When the project you are working in _is_ PM, that engine is behind your working tree, and its `PostToolUse` hook then rewrites the tracked `PROJECT.md` using an engine that predates your change, on every commit.
+
+Export the opt-in, naming your checkout, in whatever file your shell reads:
+
+```bash
+export PM_ENGINE_DELEGATION="$HOME/path/to/your/pm/checkout"
+```
+
+<Note>
+  **It has to live outside the repository, and that is the point rather than an oversight.** A plugin's reach ends at the project it is invoked in — it cannot write your shell profile. That boundary is exactly what makes the value trustworthy: it names one checkout and is compared by real path, so authorization comes from your environment, which a repository cannot reach. A bare `=1` would authorize the handoff in every project that shell ever opens; don't substitute one.
+</Note>
+
+Full explanation and a verification command are in [CONTRIBUTING.md](https://github.com/cfdude/pm/blob/main/CONTRIBUTING.md).

@@ -1,0 +1,90 @@
+---
+title: "/pm:cross-spec-review — Do a Release's Specs Agree With Each Other?"
+sidebarTitle: "/pm:cross-spec-review"
+description: "A release-scope review gate. Gate 1 and Gate 2 each take one change as their unit, so neither can ask whether a release's specs contradict each other. This one does."
+icon: "layer-group"
+---
+
+Gate 1 reviews **one change's** artifacts. Gate 2 reviews **one change's** implementation. A release is many changes, and until this gate existed nothing asked the question that only appears when you hold the whole set at once: **do these specs agree with each other?**
+
+Every finding this gate returns involves **two documents at once**, so no amount of per-spec rigor surfaces them.
+
+<Note>
+  Measured on PM's own 0.27.0: six specs that had each passed `openspec validate --strict`, and would each have passed Gate 1 alone, returned **5 Critical and 10 Important** when reviewed as a set — including a flagship scenario that was literally unreachable, and a shared flag allowlist four capabilities all needed to grow. A re-review after the fixes found **two more Criticals introduced by those fixes**.
+</Note>
+
+## When it fires
+
+**Any release holding two or more spec files, before `/opsx:apply`.** The count is **flat** across the release's member changes, so one change carrying six specs qualifies exactly as six changes carrying one each do.
+
+Also after any round of **concurrent amendment** — several agents editing interdependent specs in parallel is a distinct failure generator, and it is the case this gate was built from.
+
+Below that threshold it does not apply, and the engine **refuses to record a verdict** rather than storing a record that reads as coverage. Gate 1 covers a single spec completely.
+
+## The six questions
+
+They are ordered by severity, and reviewers skip the later ones unless told not to.
+
+<Steps>
+  <Step title="Contradiction">
+    Do two specs require incompatible behavior of one surface? Shipped, it is a coin flip decided by call order.
+  </Step>
+  <Step title="Double ownership">
+    Do two specs claim a behavior, such that an implementer satisfies one and considers it done?
+  </Step>
+  <Step title="Unmeetable requirements">
+    Does any spec assume a field, verb, flag, or rendering that nothing in the release creates? Watch for **passive voice around the writer** — "the array is appended as each commit is attributed" names no writer, and nothing appends.
+  </Step>
+  <Step title="Gaps">
+    Walk the proposal's resolves-list **one issue at a time** and confirm each maps to a real requirement. Half-covered issues hide here.
+  </Step>
+  <Step title="Vocabulary forks">
+    Is one concept named two ways? That becomes two data models.
+  </Step>
+  <Step title="Shared chokepoints">
+    Is there a single allowlist, enum, or dispatch table that several capabilities must all edit? Whichever lands first rejects the others by name.
+  </Step>
+</Steps>
+
+## Reviewers scale with your review-mode dial
+
+Fresh context is mandatory: a reviewer that watched the specs being written inherits the authors' assumptions, which are exactly what is being tested.
+
+| Review mode | Reviewers |
+| --- | --- |
+| `off` | self-review only |
+| `standard` | one fresh-context reviewer |
+| `thorough` | two, with **different lenses** — coherence/contradiction, and falsifiability/dependency-order — and you adjudicate any disagreement |
+
+## Recording the verdict
+
+```text
+record-cross-spec-review <releaseId> --verdict pass|fail [--reviewer "<who>"]
+```
+
+**You never supply the spec list.** The engine enumerates the release's spec set from disk and stores a SHA-256 per file it read — because a spec list typed by the party being reviewed goes stale the moment a capability is added, and that staleness is precisely what this gate exists to catch.
+
+That also makes the verdict go stale **on its own**:
+
+| State | Meaning |
+| --- | --- |
+| `fresh` | every spec in the set is byte-identical to what the reviewer read |
+| `⚠ stale` | a spec was **added** after the verdict, or a reviewed spec was **amended** |
+| `⚠ unverifiable` | a spec could not be read — a `pass` is refused rather than recorded against evidence that does not exist |
+| `⚠ no cross-spec review (N specs)` | a multi-spec release with no verdict at all |
+
+That last row is the point of the whole rendering: **silence and "reviewed and clean" must never look the same.**
+
+The record is keyed change-relative, so archiving a change never reads as staleness. Re-recording supersedes the prior verdict and keeps it readable, one nested level deep — the same supersede-never-destroy rule `record-gate-review` follows.
+
+## Findings are not a mandate
+
+Split what comes back into **BLOCKS** (implementing this ships a defect) and **POLISH** (correct as written, could be better). Fix every BLOCKS; decline most POLISH and say why. The stopping condition is an empty BLOCKS list, not zero findings.
+
+<Warning>
+  **A contradiction is never POLISH.** Two specs requiring incompatible behavior of one surface gets resolved by whoever hits it first, silently, and by call order. It is the one finding class that may never be deferred.
+</Warning>
+
+<Card title="Review mode" icon="sliders" href="/commands/review-mode">
+  This gate reuses the same dial as Gate 1 and Gate 2 — set it once per repo.
+</Card>
