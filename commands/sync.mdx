@@ -47,6 +47,18 @@ Registration is only half of an inward sync. For every epic **already** linked t
 conductor.mjs update-epic <id> --external-updated-at <iso>
 ```
 
+## The other direction: an item that is no longer open
+
+**New in 0.30.0.** Sync reads tracker state anyway, so it now also looks the other way: for an epic whose linked item the tracker reports **closed** while the epic itself is still non-terminal, sync **proposes** the disposition.
+
+Proposing, never writing. The engine cannot know _why_ work ended, and a reason is precisely what a disposition exists to preserve — so you get the exact command with the reason left to you:
+
+```bash
+conductor.mjs update-epic <id> --status archived --outcome delivered --no-deferrals
+```
+
+This closes the gap where a release ships, every tracker item closes, and every epic stays `queued` — after which the next-work recommendation confidently names work that shipped hours ago. An epic already `archived` is excluded by name, so this never adds noise to a backlog that is already correct.
+
 <Note>
   The engine itself only scans local files and never calls an external system directly. What you do externally is decided by each tracker's `direction`, and the rules block in your project-instruction file already carries the exact steps for whichever branch applies. An **outward-only** tracker (or one that names no scope) means sync reads nothing external — it registers local OpenSpec/Superpowers sources and stops, and its confirmation line says so.
 </Note>

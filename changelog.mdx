@@ -8,6 +8,25 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.30.0" description="2026-08-27">
+  **Two things the record and the boundary already knew and could not say.**
+
+  ### Added
+
+  - **A release delivers and its member epics stay open.** Three signals sat in `state.json` at once and nothing consumed them: the epic names a release, that release has a delivered member, and the epic is _not_ in that release's `deferred[]` — the object already distinguishes "cut on purpose" from "shipped", and only the exclusion half was ever read. Measured: a release shipped, all twenty tracker items closed, all twenty epics stayed `queued`, and the next-work recommendation named two P0s that had shipped hours earlier.
+    - A new `integrity` check reports it, and `/pm:sync` now **proposes** the disposition for an epic whose linked item is no longer open. Proposing, never writing — the reason is the agent's, and a reason is what a disposition exists to preserve.
+    - A **batch `--release` form was deliberately declined.** An agent-supplied disposition is currently unreplaceable, so writing twenty terminal dispositions from one invocation is an uncorrectable bulk write of the record's most load-bearing field. The defect was never the price of twenty calls — it was that nobody knew they were owed, which the check and the sync step both address and a batch verb addresses neither.
+    - A release object carries no parent pointer and no delivery marker, so "did this release deliver" is read **member-derived**: at least one member delivered, none still in flight. That is a stated trade — a release with any active member goes quiet for the whole release, so the check reports _late_ rather than never. Late-and-quiet was chosen over early-and-noisy on purpose.
+    - Also new: **a superseded epic that never ended** — epic A declares it supersedes B, and B is still queued or active.
+
+  ### Fixed
+
+  - **Fourteen command docs resolved the engine from the project directory.** The "if the plugin cache is empty" fallback tried `$CLAUDE_PROJECT_DIR/scripts/conductor.mjs` **first**, and its only test was `-f` — so any project with a file at that path got it executed by `node` when a user ran a `/pm:*` command, with no check that the project was pm.
+    - **Deleted rather than gated**, and the reasoning is the point: any gate would have to be read from the environment, and a plugin cannot set an environment variable — so it would be a switch nobody could operate. Users never benefited from that arm at all; contributors already have `PM_ENGINE_DELEGATION`, which is authorized by real path against something a project cannot write.
+    - A **fifteenth site** instructed the same resolution in _prose_ rather than a code fence, so a pattern search structurally could not see it — deleting only the fenced blocks would have left an agent to hand-roll the arm back.
+    - A CI guard now walks **every** shipped instruction surface — commands, skills, agents, hooks, manifest — and fails on either the original shape or its hand-rolled variant. Its claim is scoped honestly to what it actually matches: an indirection through another variable would pass it.
+</Update>
+
 <Update label="0.29.0" description="2026-08-27">
   **Ordering that can see what blocks it, and an intake that can see what already exists.** Both are questions PM could not previously ask about its own backlog.
 
