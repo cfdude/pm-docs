@@ -8,6 +8,27 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.33.0" description="2026-08-29">
+  **Seven issues, and three of them turned out to be about the guard rather than the code.**
+
+  ### Added
+
+  - **The commit hook names the attribution command at the moment the commit lands.** The gate procedure asks for `update-epic <id> --attribute-commit <sha>` _as each commit is made_, and nothing checked until the archive gate read the array — by which time the commits exist, often across sessions, and the append-only ordering rule may already be irrecoverably broken. Since the hook now knows from the repository whether a commit actually landed, it can say so at the only moment the advice still changes the outcome.
+    - It names the **detour** epic while a detour is live, never the paused parent the active pointer still points at — and resolves the id against the record rather than trusting it, so a placeholder can never produce a command that will not run.
+    - **Louder exactly once.** While an epic has attributed nothing, the clause carries the catch-up-in-order rule, because that is the only state in which catching up is still possible. After the first attribution it is one line, forever. The escalation extinguishes itself off state the _agent_ wrote — the hook keeps no bookkeeping of its own.
+    - Silent wherever the engine would be guessing: no active epic, a sha that is not a sha, a commit already attributed, and every commit on the unverifiable rung.
+  - **A declaration of which verbs mutate the working tree, verified mechanically.** `render` writes `PROJECT.md`; `brief` does not — and nothing said so. All 39 dispatched verbs now carry a declared effect, checked for completeness against the dispatcher itself and **exercised**: every read-only verb runs against a repository with a render pending, and the tree is hashed by content _and_ mtime.
+
+  ### Fixed
+
+  - **`PROJECT.md`'s commit loop is closed.** A bookkeeping commit appended a detour row, which changed `PROJECT.md`, which produced another commit. Two independent causes: the trail now refuses a second row for a `(sha, kind)` it already holds, and the bookkeeping filter that guarded one branch had **never been applied to its sibling** — a rule at one call site and not the identical one beside it.
+    - Nothing suppresses a render and nothing freezes the timestamp. The fix is to the _cause of change_, not the _reporting of it_: a generated file that never changes is as wrong as one that always does.
+  - **A warning when the conductor is pointed at a different repository.** `CLAUDE_PROJECT_DIR` silently overrides the working directory, so a stale value means every read and write lands in another repo with no signal at all. It now warns — naming both repositories and how to undo it — on three required conditions: the variable is set, it resolves through `realpath` to a different directory, **and** the directory you are standing in has a conductor of its own.
+    - That last condition is the discriminator: running from a subdirectory, or targeting a project from a neutral directory, stays silent. Only when two initialised projects are in play was there a choice that could have gone the other way. It **warns and never refuses** — cross-repo dispatch is a legitimate pattern, and the defect was that a redirect was indistinguishable in the output, not that it happened.
+  - **`/pm:feedback` declares its `gh` dependency, and gains two channels that need none** — a prefilled issue URL and an email address. The report is written locally first on every path, so it survives regardless of which channel is available.
+  - **The retry half of "retry once, then skip" is now provable.** It had no test that failed when it was removed — and the claim reproduced at HEAD six releases after it was filed: deleting the retry from both call sites left the suite entirely green. One of the two sites remains unobservable end-to-end (its caller re-runs an idempotent heal two lines later, which is the cover that hid the defect); that site is bound by a source-level check rather than a fabricated injection.
+</Update>
+
 <Update label="0.32.0" description="2026-08-27">
   **A record you can correct, a hook that observes instead of guessing, and the association one artifact over.**
 
@@ -20,8 +41,7 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
   - **`--correct-disposition "<why the recorded one was wrong>"`.** A recorded disposition used to be unreplaceable, so a mistyped outcome — or one recorded without its reason — had no correction verb and forced a hand-edit of `state.json`. Correcting one is now deliberate, self-describing, and non-destructive:
     - **Deliberate** — never reachable by re-running the ordinary verb, and refused outright when there is no agent record to correct. An engine stamp is still replaced the ordinary way; an epic with no disposition has nothing to supersede.
     - **Self-describing** — the flag carries its own justification, so a correction cannot be recorded without saying why.
-    - **Non-destructive** — the prior record survives verbatim under `superseded`, reusing the same key and one-level cap that gate verdicts already use. Every surface renders `· corrected (was <prior outcome>)`.
-    The engine deliberately does **not** gate on _who_: an agent's disposition carries no identity by construction, so "only the agent who recorded it may correct it" would be unenforceable rather than strict. What it requires instead is that a correction leave evidence it happened.
+    - **Non-destructive** — the prior record survives verbatim under `superseded`, reusing the same key and one-level cap that gate verdicts already use. Every surface renders `· corrected (was <prior outcome>)`. The engine deliberately does **not** gate on _who_: an agent's disposition carries no identity by construction, so "only the agent who recorded it may correct it" would be unenforceable rather than strict. What it requires instead is that a correction leave evidence it happened.
   - **`specPath`, and `verify-specs` to answer what it makes answerable.** An epic can now record the design document it came from (`--spec`), and `verify-specs` reports which documents have no epics drawn from them. It is its own verb rather than an `integrity` check on purpose — an uncovered design document _can_ legitimately be true (a note, a reference, an abandoned sketch), and filing every one as a finding is exactly the noise 0.31.0 removed from the freshness warning. It reports, never repairs, and never speaks unless asked.
     - Coverage is family-driven rather than `specPath`-only, so pointing it at a plans directory answers the same question about plans. Status-blind: an archived epic for a chunk **is** coverage of that chunk.
 
