@@ -32,7 +32,19 @@ description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issu
 
 ## Deduplication
 
-Sync never creates duplicate epics. For OpenSpec and Superpowers sources, deduplication is by the epic's id — if an epic with that id already exists in `state.json`, the candidate is skipped silently. For tracker items, deduplication is by `externalUrl`, which is globally unique; a bare `externalId` is only unique within one tracker/repo, so two trackers can each hold an issue numbered `#42` without colliding. The emitted registration recipe also supplies a **derived** epic id (`<system>-<scope>-<number>`), so the same item yields the same id in every repo and session and a re-run is refused as a duplicate rather than landing under an invented slug. Re-running `/pm:sync` as many times as you like is always safe.
+<Info>
+  **Changed in 0.31.0 for plan files.** Deduplication used to key on an id derived from the plan's _filename_, so an epic whose plan was renamed — or whose id was simply chosen differently — was re-registered forever, and a finished plan came back as a fresh untriaged epic. Sync now keys on a real **epic↔plan association** (`planPath`), and walks a five-rung ladder per plan file:
+
+  1. **Claimed** — some epic's `planPath` names this file. Status- and lane-blind on purpose: that _is_ the done-signal, and it needs no completion heuristic.
+  2. **Literal id match** — an epic already carries the plan's derived id.
+  3. **Tombstone** — the removal verb recorded that this artifact must not be re-registered, so a removal survives the next sync. Attaching the plan to an epic (`update-epic <id> --plan <path>`) clears it.
+  4. **Name match, unclaimed only** — the epic id equals the plan id minus its date prefix **and** that epic claims no plan already. Sync skips and prints both exits rather than silently repointing an epic's progress source.
+  5. Otherwise, register.
+
+  A plan whose id no normalisation can recover — renamed to something genuinely different — is handled by attaching it once: `update-epic <id> --plan <path>`, after which rung 1 does the rest forever.
+</Info>
+
+For OpenSpec sources, deduplication is by the epic's id — if an epic with that id already exists in `state.json`, the candidate is skipped silently. For tracker items, deduplication is by `externalUrl`, which is globally unique; a bare `externalId` is only unique within one tracker/repo, so two trackers can each hold an issue numbered `#42` without colliding. The emitted registration recipe also supplies a **derived** epic id (`<system>-<scope>-<number>`), so the same item yields the same id in every repo and session and a re-run is refused as a duplicate rather than landing under an invented slug. Re-running `/pm:sync` as many times as you like is always safe.
 
 ## When to run it
 
@@ -41,6 +53,8 @@ Run `/pm:sync` after **pulling changes from another branch** that may have intro
 ## Freshness: register what is new, re-read what moved
 
 Registration is only half of an inward sync. For every epic **already** linked to a tracker item, compare its `externalUpdatedAt` watermark against the item's tracker-side updated timestamp and read the ones that moved. **Seeing an item in a list response is not reading it** — listing must never advance a watermark, or sync erases the very drift it exists to find.
+
+**The warning counts only work that can still happen** (0.31.0). An epic that has ended owes no refresh — its item is closed, and `/pm:sync` could never clear it, so counting it named an action that could not reduce the number it reported. On PM's own record that was 60 counted where 31 were real. The archive disposition discharges the obligation; there is no separate terminal watermark, because a record that ended does not need a second ending.
 
 ```bash
 # a plain re-read during sync, no verdict owed

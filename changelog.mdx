@@ -8,6 +8,28 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.31.0" description="2026-08-27">
+  **Four issues, and two of them ended somewhere other than where they started.**
+
+  ### Added
+
+  - **Sync dedups plan files on a real epic↔plan association, not a filename.** Deduplication keyed on an id derived from the plan's filename, so an epic whose plan was renamed — or whose id was chosen differently — was re-registered forever, and a finished plan came back as a fresh untriaged epic. Sync now walks a five-rung ladder per plan: claimed by some epic's association (status- and lane-blind, which is the done-signal, with no completion heuristic) · literal id match · a **tombstone** written by the removal verb so a removal survives the next sync · an id-minus-date-prefix name match, but **only** if that epic claims nothing · register.
+    - **The field family is declared once**, so `specPath` — the same missing association one artifact over — adds a single row and inherits all five behaviours rather than growing a second shape. A test fails CI if any row is settable at creation but not on the update surfaces.
+    - Verified on this repository: every plan on disk is now accounted for by a **named exit**, with zero re-registrations. The four live pairs that were one change registered twice under different lanes are exactly what this prevents.
+  - **A terminal disposition for a story that will not be done** — `update-epic <id> --story <n> --wont-do "<reason>"`. The third state a checklist needs: not open, not completed, deliberately not being done. The row and its reason always survive, because deletion would destroy the record that the work was ever projected. A disposed story leaves **both** sides of the ratio — `3/3 stories · 2 disposed` — exactly as a lifecycle-marked task does, never `5/5` (claiming completion nobody earned) and never `3/5` (a gate that refuses forever).
+    - **Stories can now be created atomically** — `--add-story` repeats, and works on `add-epic` and `add-many`, so an epic arrives with its milestones instead of acquiring them one call at a time or never.
+
+  <Note>
+    **The measurement changed the answer here, and that is worth recording.** The issue asked for a gate on unticked stories. Measuring the live record first showed the gate **already existed** — the archive gate has refused `--outcome delivered` on an epic with an unticked story since dispositions shipped. What was broken was the _remedy_: it told you to mark the task's line with a lifecycle marker, which an inline story has no task line to carry. So no new refusal was added; the gate got an honest key instead. Mandatory stories were declined outright on one number — **0 of 148 epics** use the free-text carriers shipped in 0.27.0, so the field's meaning is still migrating and mandating decomposition now would manufacture false positives.
+  </Note>
+
+  ### Fixed
+
+  - **The never-re-read warning stops counting work that has ended.** It reported every tracker-linked epic without a watermark — including archived ones, whose linked items are closed and which `/pm:sync` therefore _cannot_ clear. So the warning named an action that could not clear the number it reported, and at that size it read as a chore nobody starts. On this repository: **60 → 31**.
+    - The engine was contradicting text it emits: the inward-sync step already says _"an epic that is already `archived` owes nothing here — it ended, and a record that ended does not need a second ending."_ A terminal watermark was weighed and rejected as a second mechanism for what the disposition already accomplishes.
+  - **An epic that has ended no longer blocks writes.** `state.active` can legitimately name an archived epic for a stretch — the pointer is cleared on write paths, and the `PreToolUse` gate-guard hook is read-only. Of the three readers of that pointer, the briefing and `PROJECT.md` both filtered an archived epic and **the guard did not** — so a stale reconcile obligation on an ended epic could wedge `Edit`/`Write`/`NotebookEdit`, on a branch that `set-gate-guard off` deliberately cannot reach. Filtered at the point of resolution rather than inside each branch, so a future obligation inherits the rule instead of having to remember it.
+</Update>
+
 <Update label="0.30.0" description="2026-08-27">
   **Two things the record and the boundary already knew and could not say.**
 
