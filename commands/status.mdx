@@ -88,6 +88,24 @@ It lists every design document under the root with the epics drawn from it, and 
 
 Coverage is status-blind: an archived epic for one chunk of a design **is** coverage of that chunk.
 
+### `--headers` — let the documents propose their own epics
+
+**New in 0.34.0.** Design documents usually name their epics in a header. `verify-specs --headers` reads the leading metadata block of each document and reports the epic ids it finds, so populating `specPath` on a repository that already has designs is a confirmation rather than a hand-backfill.
+
+```bash
+conductor.mjs verify-specs --headers
+```
+
+**It proposes; you confirm.** The engine must not decide that a document and an epic belong together, and a header is prose an author can typo — so this is the same split `/pm:triage` uses for asks: a mechanical candidate set, a human verdict.
+
+<Note>
+  The parse is **label-agnostic and region-bounded** — any `**Anything:**` line opens the block, the first blank line closes it, and backtick-quoted tokens matching the epic-id format are candidates. That was chosen empirically rather than guessed: a label allowlist dropped three genuine ids filed under `**Depends on (all three must land first):**`, and matching bare backticks anywhere would read `state.json` out of any document opening with prose.
+
+  Measured against ten real documents: **26 of 26 ids, zero false candidates**, including both cases where one design produced three epics — which is exactly what deriving the mapping from filenames could not do.
+</Note>
+
+A header id that names **no epic in the record** is reported as a finding rather than inventory — a stale header, a removed epic, or a typo. Covered documents are checked too: a document whose first named epic shipped can still name a second that never existed.
+
 ## Which verbs write — `verb-effects`
 
 `render` writes `PROJECT.md`. `brief` does not. Until 0.33.0 nothing said so, and the only way to find out was to run one and check `git status`.

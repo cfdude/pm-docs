@@ -8,6 +8,32 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.34.0" description="2026-08-29">
+  **Two practices that only ever reached one repository now ship, a link type is no longer whatever you typed, and a flag with no value stops being accepted on some surfaces and refused on others.**
+
+  ### Added
+
+  - **The dogfooding and lessons disciplines ship as skills.** Both were invented while building PM and stayed here — the dogfooding rule appeared twice in this repository's own project file and **zero times** in the emitted rules block, so it reached exactly one repo, which is precisely the asymmetry it describes. Both now live in `skills/`, the local copies are stubs redirecting there, and one new **numbered required task item** carries the rule into every conductor-managed project: _route what the work taught you_ — a practice goes to the backlog with its evidence, tooling friction goes to `/pm:feedback`, a process failure goes to a lesson.
+    - **PM ships the mechanism and never the corpus.** The lesson _shape_ — the frontmatter contract, the trigger matching, the pre-mistake advisory hook — is a capability any project can use. The lessons themselves are this repository's own history and stay here.
+  - **A closed vocabulary for link types, in three bands.** `--link` validated that the epic existed and that the value split correctly; it never checked the _type_, so a typo was stored silently and then read as precedent by the next agent looking at the record. The known set is now **derived mechanically from what the code actually reads**, not typed from memory, and a test binds it to the source in both directions — an unknown literal appearing anywhere in the engine fails, and a declared type that stops appearing fails too.
+    | Band | Types |
+    | --- | --- |
+    | Read by the engine | `depends-on`, `supersedes` |
+    | Written as protocol state, nothing switches on it | `may-invalidate` |
+    | Annotation only | `relates-to`, `blocks`, `resolves-blocker-for` |
+    Three bands rather than two because _known_ and _does something_ are different claims, and collapsing them would be the same overclaim the issue was about. Records already holding an unknown type **load, render, and are reported — never rewritten**: validation is on write only, and rewriting a stored type changes meaning rather than repairing a typo.
+  - **`verify-specs --headers` proposes the epics a design document already names.** Backfilling `specPath` revealed that the documents declare their own epics in a header — and that deriving the mapping from _filenames_ placed 8 of 10 while structurally missing exactly the many-to-one cases the field exists for. The parse is label-agnostic and bounded to the leading metadata block, chosen empirically against all ten real documents: **26 of 26 ids, zero false candidates**. It proposes; you confirm. A header id naming no epic in the record is reported as a finding, from covered documents too.
+
+  ### Fixed
+
+  - **A flag with no value is refused on every command that accepts it.** `add-epic --plan` with no value exited 0 and created the epic with no plan attached, while `update-epic --plan` refused the identical mistake a minute later. Three flags legitimately carry no value; **everything else is value-bearing by default**, declared once on the shared registry so six write surfaces cannot answer it three different ways.
+    - The sweep found the defect at a **fourth surface nobody had named**: `record-gate-review` checked no flag for a value at all, so a valueless `--reviewer` recorded a gate verdict with the reviewer's identity simply absent.
+  - **Serial deferrals are visible.** The stack block now reads `paused 11d · 3rd deferral of this epic`, derived from the record rather than a stored counter, and silent on a first deferral.
+    <Note>
+      **The pushback this issue asked for was declined, for a structural reason rather than a judgment call.** There is no `push-detour` verb — the substantial-detour PUSH is a documented hand-edit of the state file, so the engine is not running at the moment a deferral is decided and a gate has nowhere to live. Visibility shipped; the gate becomes buildable only once the engine is present at that transition.
+    </Note>
+</Update>
+
 <Update label="0.33.0" description="2026-08-29">
   **Seven issues, and three of them turned out to be about the guard rather than the code.**
 
