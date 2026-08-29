@@ -49,6 +49,16 @@ conductor.mjs suggest-lane "add a brand-new subsystem"
 # {"lane":null,"matched":null}
 ```
 
+## The suggestion is an input, not a verdict
+
+**New in 0.36.0.** `suggest-lane` answers a **mechanical** question — does any configured pattern match this text — and the lane a change actually belongs in depends on things the engine cannot see: what the change touches, what it is for, whether it is on a milestone. That layer does not exist, so the emitted instructions now say the judgment half is **absent** rather than letting a pattern match read as a decision.
+
+<Warning>
+  **The tie-break is deliberately asymmetric.** The lightest lane leaves no spec, no plan, no gate verdict and no stories behind. So the two errors are not equal: routing too heavily costs hours, and routing too lightly costs the _record_, permanently.
+
+  An unresolved routing question therefore resolves **away** from the lightest lane, never into it. When you overrule the suggestion, record why on the epic — that note is the only thing that tells a later reader the lane was chosen rather than defaulted.
+</Warning>
+
 ## Use cases
 
 Routing rules shine wherever your project has conventions that are obvious to your team but opaque to a heuristic:
@@ -58,5 +68,5 @@ Routing rules shine wherever your project has conventions that are obvious to yo
 - **`"infra*:decision"`** — infrastructure changes are recorded as architectural decisions, not built through a code-delivery lane.
 
 <Tip>
-Lane routing rules are stored in `state.json` under `laneRouting[]` and are re-applied by the `CLAUDE.md` rules block every session. You do not need to re-set them after a context compaction — the rules are durable from the moment you add them.
+  Lane routing rules are stored in `state.json` under `laneRouting[]` and are re-applied by the `CLAUDE.md` rules block every session. You do not need to re-set them after a context compaction — the rules are durable from the moment you add them.
 </Tip>
