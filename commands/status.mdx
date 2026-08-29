@@ -70,6 +70,24 @@ Every check is reported with its count **including the ones that found nothing**
   **On the first run after upgrading to 0.27.0, expect a burst of `heal-archived-epic-passed-gate-2`.** Every repo that followed the documented `/opsx:archive` then heal flow lands on `outcome: unknown` rather than `delivered`: the migration only stamps epics already `archived` in state, and the heal flips the rest afterwards. Expected, not a bug — each finding carries the exact remedy.
 </Warning>
 
+## Design-document coverage — `verify-specs`
+
+Once epics can name the design document they came from (`--spec`), "which design documents produced no work?" becomes mechanically answerable.
+
+```bash
+conductor.mjs verify-specs [--root <path>]
+```
+
+It lists every design document under the root with the epics drawn from it, and names the ones with none. A document counts as any `.md` under the root, recursively, minus `README`/`INDEX`/`CONTRIBUTING` — the same named-exclusion rule the plan scan uses, so the two cannot disagree. Point `--root` at a plans directory and it answers the same question about plans.
+
+<Note>
+  **This is a listing verb, not an integrity check, and the distinction is deliberate.** `integrity` reports shapes that _cannot be true_. A design document with no epic **can** be true and often is — a note, a reference, an abandoned sketch. Filing every one as a finding is exactly the noise that made the freshness warning ignorable before 0.31.0 scoped it. So `verify-specs` reports only when asked, always exits 0, and never speaks on its own.
+
+  An **absent** root prints "no spec root" rather than "0 uncovered" — a repository that keeps its designs elsewhere should not get a confidently empty report.
+</Note>
+
+Coverage is status-blind: an archived epic for one chunk of a design **is** coverage of that chunk.
+
 ## Release planning — `release`
 
 A release is a named grouping of epics the agent declares: an id, intent prose, an optional target, and the epics deliberately cut from it. It exists because a release's scoping judgments otherwise survive only in the session that made them.

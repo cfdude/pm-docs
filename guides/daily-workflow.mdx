@@ -60,7 +60,7 @@ The underlying state of record is always `.conductor/state.json`. `PROJECT.md` i
 2. **Otherwise** — find the highest-priority `queued` epic, ordered P0 → P3.
 3. **Ties** — if two epics share the same priority, PM surfaces both and asks you to decide rather than silently picking one.
 
-The `depends-on` link also shapes the queue: if an epic's declared dependency is not yet `archived`, that epic is skipped entirely and the blocker is named explicitly in the output. You always know *why* something was skipped, not just that it was.
+The `depends-on` link also shapes the queue: if an epic's declared dependency is not yet `archived`, that epic is skipped entirely and the blocker is named explicitly in the output. You always know _why_ something was skipped, not just that it was.
 
 ## After a context compaction
 
@@ -73,12 +73,20 @@ You do not need to do anything special after a compaction. PM handles the handof
 
 ## After every git commit
 
-The `PostToolUse` hook fires after every Bash tool use. PM runs `commit-nudge`, which inspects whether the invocation included a `git commit` and does two things:
+The `PostToolUse` hook fires after every Bash tool use. PM runs `commit-nudge`, which asks **whether a commit actually happened** and does two things:
 
 1. Re-renders `PROJECT.md` so the index stays current.
-2. Inspects the commit shape to detect whether it looks like an unlogged minimal detour — a small, self-contained fix that happened silently. If it does, PM suggests running `log-detour` to append a timestamped record to `.conductor/detours.log`.
+2. Inspects the commit to detect whether it looks like an unlogged minimal detour — a small, self-contained fix that happened silently. If it does, PM suggests running `log-detour` to append a timestamped record to `.conductor/detours.log`.
 
 The nudge is non-blocking. It surfaces the suggestion and moves on — it does not pause execution or wait for a response.
+
+<Note>
+  **As of 0.32.0 this observes the repository rather than reading the command.** It used to check whether the command's _text_ contained `git commit`, which fired on a `grep`, a heredoc, or a doc edit that merely mentioned it — asserting a commit that never happened. It now records a `HEAD` watermark on every Bash call and classifies any move through the reflog.
+
+  That is **flag-form-blind by construction**: `-am`, `-F`, an editor commit with no message flag, escaped quotes, and forms git has not invented yet are all covered, because the subject comes from the commit itself rather than from a pattern over your command. It also fixes the opposite failure, which was the quieter one — a commit made inside a wrapper script, whose text never says `git commit`, used to go unnoticed entirely.
+
+  Every read is three-valued: no git, not a repository, no reflog, or a missing watermark all fall back to the previous behaviour rather than erroring.
+</Note>
 
 <Tip>
   Keep `PROJECT.md` open in a split pane. It updates after every `render` call so you can see the live queue, active epic, and detour stack at a glance without running a command.

@@ -8,6 +8,32 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.32.0" description="2026-08-27">
+  **A record you can correct, a hook that observes instead of guessing, and the association one artifact over.**
+
+  <Warning>
+    **This release carries a migration.** Update the plugin, `/reload-plugins`, then run `/pm:upgrade` in each repo. Until you do, an epic registered by the archive backfill renders `—` for its task counts and appears in the completion-shaped integrity checks. The lift is additive and idempotent.
+  </Warning>
+
+  ### Added
+
+  - **`--correct-disposition "<why the recorded one was wrong>"`.** A recorded disposition used to be unreplaceable, so a mistyped outcome — or one recorded without its reason — had no correction verb and forced a hand-edit of `state.json`. Correcting one is now deliberate, self-describing, and non-destructive:
+    - **Deliberate** — never reachable by re-running the ordinary verb, and refused outright when there is no agent record to correct. An engine stamp is still replaced the ordinary way; an epic with no disposition has nothing to supersede.
+    - **Self-describing** — the flag carries its own justification, so a correction cannot be recorded without saying why.
+    - **Non-destructive** — the prior record survives verbatim under `superseded`, reusing the same key and one-level cap that gate verdicts already use. Every surface renders `· corrected (was <prior outcome>)`.
+    The engine deliberately does **not** gate on _who_: an agent's disposition carries no identity by construction, so "only the agent who recorded it may correct it" would be unenforceable rather than strict. What it requires instead is that a correction leave evidence it happened.
+  - **`specPath`, and `verify-specs` to answer what it makes answerable.** An epic can now record the design document it came from (`--spec`), and `verify-specs` reports which documents have no epics drawn from them. It is its own verb rather than an `integrity` check on purpose — an uncovered design document _can_ legitimately be true (a note, a reference, an abandoned sketch), and filing every one as a finding is exactly the noise 0.31.0 removed from the freshness warning. It reports, never repairs, and never speaks unless asked.
+    - Coverage is family-driven rather than `specPath`-only, so pointing it at a plans directory answers the same question about plans. Status-blind: an archived epic for a chunk **is** coverage of that chunk.
+
+  ### Fixed
+
+  - **The commit hook observes the repository instead of parsing the command.** It fired on any Bash command whose _text_ contained `git commit` — a `grep`, a heredoc, a doc edit — asserting a commit that never happened; and it logged a spurious minimal detour when no epic was active. It now reads a `HEAD` watermark and classifies the move through the reflog.
+    - **Flag-form-blind by construction.** `-am`, `-F`, editor commits with no message flag, escaped quotes, and forms git has not invented yet are all covered, because the subject comes from the commit itself rather than from a pattern over the command.
+    - It also closes a **false negative** the text check had: a commit made inside a wrapper script, whose command text never says `git commit`, is now noticed. A backgrounded commit is caught on the next call and attributed to its own sha.
+    - Every read is three-valued. No git, not a repository, no reflog, missing or corrupt watermark — all fall back to the previous heuristic rather than erroring, which matters for a hook that fires on every Bash call in every initialised project.
+  - **Recording an honest disposition no longer reverts a backfilled epic's task counts.** The root cause was provenance living inside the one field whose entire contract is that an agent overwrites it: registration was recorded on the _disposition_, and the interactive verb replaces that wholesale. Two lifecycles sharing one host, so recording the truth destroyed the evidence. Registration now lives on the epic and no disposition write touches it.
+</Update>
+
 <Update label="0.31.0" description="2026-08-27">
   **Four issues, and two of them ended somewhere other than where they started.**
 

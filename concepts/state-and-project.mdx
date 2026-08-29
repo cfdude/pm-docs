@@ -14,6 +14,7 @@ Three files live here. Each has a distinct purpose and a distinct write policy.
 .conductor/
 ├── state.json           # state of record — never hand-edit
 ├── detours.log          # append-only trail of all detour events
+├── commit-watch.json    # HEAD watermark the commit hook observes (git-ignored)
 └── honcho-memories.log  # ready-to-copy Honcho memory lines
 ```
 
@@ -24,9 +25,9 @@ The directory is created by `/pm:init` and managed entirely by the PM engine aft
 The top-level fields of `.conductor/state.json` and what they mean:
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `active` | `string \| null` | The currently active epic id. Set by `set-active`; cleared by `clear-active`. Never hand-edit this pointer — `set-active` also keeps `status: "active"` in sync and demotes any prior active epic. |
-| `epics[]` | `array` | The full list of epics. Each entry has `id`, `title`, `lane`, `priority`, `status`, `role`, `parent?`, `links[]`, `reconcileNeeded?`, `autonomy?`, `gateReview?`, `externalId?`, `externalUrl?`, `planPath?`, and `stories[]?`. |
+| `epics[]` | `array` | The full list of epics. Each entry has `id`, `title`, `lane`, `priority`, `status`, `role`, `parent?`, `links[]`, `reconcileNeeded?`, `autonomy?`, `gateReview?`, `externalId?`, `externalUrl?`, `planPath?`, `specPath?`, `registeredBy?`, `disposition?`, and `stories[]?`. |
 | `detourStack[]` | `array` | Stack frames, LIFO order. Each frame has `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume`. |
 | `tracker` | `object?` | Optional external tracker config (`system`, `instance`, `projectKey`, `mechanism`, `repo`, `statusIntent`). Set via `/pm:tracker`. |
 | `gateGuard` | `boolean?` | Repo-level PreToolUse guard toggle. Reserved for future hook generalizations — this flag no longer controls the reconcile-owed check, which blocks unconditionally whenever `reconcileNeeded: true` regardless of this setting. |
@@ -81,7 +82,11 @@ The `SessionStart` hook re-injects the briefing via `additionalContext` every ti
 2026-07-15T17:45:00Z · b7e2d44 · substantial-pop · fix-auth-middleware → my-feature-epic · "reconcile: valid"
 ```
 
-Every minimal detour is logged here by the `log-detour` subcommand. Substantial pushes and pops are logged automatically. The `PostToolUse` hook also auto-detects unlogged minimal detours from commit shape (file count, commit prefix, whether an active detour is already open) and logs them without requiring a manual `/pm:detour --minimal` invocation.
+Every minimal detour is logged here by the `log-detour` subcommand. Substantial pushes and pops are logged automatically. The `PostToolUse` hook also auto-detects unlogged minimal detours from the commit's shape — file count, commit prefix, whether an epic is active at all, and whether an active detour is already open — and logs them without requiring a manual `/pm:detour --minimal` invocation.
+
+<Note>
+  **Two corrections shipped in 0.32.0.** The hook used to log a spurious minimal detour for a perfectly ordinary commit when **no epic was active** — there is no work to detour _from_ in that case, so nothing is logged now. And the detection reads the repository rather than the command text, so a commit in any flag form is seen and a command that merely _mentions_ `git commit` is not.
+</Note>
 
 This log is never modified by hand. If you need to audit what happened during a session or trace when a particular change was introduced as a side-effect of a detour, this is the file to read.
 
@@ -90,6 +95,7 @@ This log is never modified by hand. If you need to audit what happened during a 
 PM writes and maintains a managed rules block in the project's `CLAUDE.md`. This is how the conductor discipline — the detour protocols, the reconcile gate, the tracker sync instructions, the lane workflow rules — becomes part of every Claude Code session automatically, without you re-reading documentation.
 
 The rules block is:
+
 - **Written by `/pm:init`** when a project is first set up.
 - **Re-injected by the `SessionStart` hook** via `additionalContext` on every session open, resume, and compaction recovery, so the rules survive context loss.
 - **Refreshable via `/pm:upgrade`** after a plugin update — run it to pull in any new rules or behavioral changes from the latest version.

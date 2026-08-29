@@ -28,7 +28,8 @@ conductor.mjs add-epic \
 - **`--parent`** — Nests this epic under an existing parent. The parent must already exist, an epic may not be its own parent, and the link may not form a cycle.
 - **`--external-id`** — Links the epic to an issue key in a configured external tracker (e.g. `JOB-506`). See `/pm:tracker`.
 - **`--external-url`** — Full URL to the corresponding issue in the external tracker.
-- **`--plan`** — Repo-relative path to a markdown plan file. Used as the progress source for `superpowers`-lane epics.
+- **`--plan`** — Repo-relative path to a markdown plan file. Used as the progress source for `superpowers`-lane epics, and the association `sync` dedups on.
+- **`--spec`** — Repo-relative path to the **design document this epic came from** (0.32.0). Provenance, not a progress source: nothing is counted from it. Many epics may name one document — that is the point, since a design usually implies more than one piece of work — and `verify-specs` reports which documents have no epics drawn from them.
 - **`--link`** — Validated, not just parsed: the referenced epic id must already exist and the value must split into at least `type` and `epic`. A malformed value (typo'd id, wrong segment order) is rejected with a clear error rather than stored silently. The flag is repeatable.
 
 ## Bulk create with add-many
@@ -152,7 +153,29 @@ conductor.mjs update-epic <id> --status archived \
 
 The gate also refuses to archive an `openspec`-lane epic as `delivered` without a passing, **non-stale** Gate 2, and demands `--carried-to <epicId> --reason "<which tasks moved>"` where outstanding work remains. `killed`, `superseded`, and `abandoned` are exempt from both demands by design: the code was never written or was thrown away, and the required reason already answers where the work went.
 
-An **engine-written** disposition — the migration's stamp, the archive-drift heal's — may be replaced by an agent recording a real one. Another agent's recorded judgment may not; correcting a mistaken disposition is not something this verb does.
+An **engine-written** disposition — the migration's stamp, the archive-drift heal's — may be replaced by an agent recording a real one. Another agent's recorded judgment may not, by the ordinary route.
+
+### Correcting one — `--correct-disposition`
+
+A mistyped outcome, or one recorded without its reason, used to have no correction verb at all and forced a hand-edit of `state.json`. As of 0.32.0:
+
+```bash
+conductor.mjs update-epic <id> --status archived --outcome <o> \
+  --reason "<what actually happened>" \
+  --correct-disposition "<why the recorded one was wrong>"
+```
+
+Three properties, each doing a specific job:
+
+- **Deliberate.** It is never reachable by re-running the ordinary verb, which still refuses — it now names this route instead of dead-ending. It is refused outright when there is nothing to correct: an engine stamp is replaced the ordinary way, and an epic with no disposition has nothing to supersede. That is what stops it becoming "any agent may overwrite any judgment."
+- **Self-describing.** The flag carries its own justification, so a correction cannot be recorded without saying why.
+- **Non-destructive.** The prior record survives verbatim under `disposition.superseded` — one level deep, the same shape and cap `record-gate-review` already uses. Every surface renders `· corrected (was <prior outcome>)`, so a correction is visible where people read rather than only in the JSON.
+
+<Note>
+  **The engine deliberately does not gate on _who_.** An agent's disposition carries no identity by construction — the absence of `recordedBy` is precisely what marks a record as an agent's — so "only the agent who recorded it may correct it" would be unenforceable rather than strict. What the engine can require, and does, is that a correction leave evidence that a correction happened.
+
+  A time window was considered and rejected: a wrong `delivered` noticed next week is exactly as false as one noticed in the same minute.
+</Note>
 
 `remove-epic` stays available and ungated for what it is actually for: an epic registered in error, a duplicate, a mistake made a minute ago — where there is no disposition to record because there was no work.
 
