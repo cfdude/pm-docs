@@ -106,6 +106,16 @@ conductor.mjs verify-specs --headers
 
 A header id that names **no epic in the record** is reported as a finding rather than inventory — a stale header, a removed epic, or a typo. Covered documents are checked too: a document whose first named epic shipped can still name a second that never existed.
 
+## This shape is a default, not a house style
+
+**New in 0.36.0.** The layout above is what PM emits for someone who has configured nothing. If you have an output style or a communication contract in your project file, **yours wins** — PM's shape is a default, and a plugin's preference does not outrank your instructions.
+
+What does _not_ bend is anything PM **records**: a disposition's reason, a gate verdict's range, an attribution. Those are writes to the state file rather than sentences, so no communication contract reaches them — applying "be brief" to a recorded reason is data loss, not brevity. Nor do the field names agents exchange between themselves, which are a wire format another agent branches on; the prose inside those fields is ordinary writing and does follow you.
+
+<Warning>
+  Deference has a limit, and it is stated in the emitted rules: your contract governs **how you report**, never **what PM instructs you to do**. A brevity preference does not excuse a required task item, a gate, or a recorded reason. And where your shape has no slot for something required — a notification read-back, a deferral list, a blocked child — the rule is **reshape, never drop**: add a slot.
+</Warning>
+
 ## Which verbs write — `verb-effects`
 
 `render` writes `PROJECT.md`. `brief` does not. Until 0.33.0 nothing said so, and the only way to find out was to run one and check `git status`.

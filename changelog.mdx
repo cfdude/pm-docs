@@ -8,6 +8,32 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.36.0" description="2026-08-29">
+  **PM stops imposing a house style — and a shipped file that had been quietly broken for four releases is whole again.**
+
+  ### Added
+
+  - **Your output style and your project's communication contract now outrank PM's reporting shape.** PM emitted a prescribed closeout format regardless of what you had configured, which inverted the ordinary precedence: your instructions outrank a plugin's preference. The split is **three bands, not two**, and the middle one is the part that matters:
+    | Band | Follows your style? |
+    | --- | --- |
+    | **Recorded** — a disposition's reason, a gate verdict, an attribution | **No.** These are _writes to the state file, not sentences_. Applying "be brief" to a disposition's reason is data loss, not brevity. |
+    | **Parsed** — the fields agents exchange (`STATUS`, `VERDICT`, `AMENDMENTS`) | **Field names and order: no** — it is a wire format another agent branches on. **The prose inside a field: yes**, that is ordinary writing. |
+    | **Narrated** — status output, end-of-epic reports, gate summaries | **Yes.** PM's headings are a default for someone who configured none, never a style that outranks one. |
+    Two guards keep deference from swallowing the rule: it scopes to **how you report and never to what PM instructs you to do** — a brevity contract does not excuse a required task item or a recorded reason — and the mapping is **reshape, never drop**: where your shape has no slot for a required element, add one.
+  - **Delegate discovery, so exploration never fills the orchestrator's context.** Placed as an operating rule rather than a gate item, deliberately: every gate item is a per-change record obligation ticked in a task list, and a per-action habit that fires dozens of times per change would dilute a list whose whole authority is that every member is a real gate. It carries an explicit carve-out — delegating never weakens a full-read requirement, and substituting a keyword grep for a full read is forbidden whoever performs it.
+  - **Lane routing becomes a deliberate decision.** The mechanical suggestion is demoted to _an input_ rather than read as a verdict, the judgment half is named as **absent**, and the tie-break is made **directional**: the lightest lane leaves no spec, plan, gate or stories behind, so over-processing costs hours while under-processing costs the record permanently — an unresolved routing question therefore resolves _away_ from the lightest lane, never into it.
+    <Note>
+      **Partial, and said to be partial.** The original complaint — that routing has no product or milestone context to weigh — stays open, because that layer does not exist and the engine cannot invent it without becoming an integration layer. What shipped is a better _instruction_, not a better algorithm.
+    </Note>
+
+  ### Fixed
+
+  - **A shipped skill had been silently truncated since 0.31.0.** `skills/conductor/SKILL.md` lost 78 lines mid-document and went out that way in five consecutive releases.
+    The signature was an **odd number of code fences** — a markdown file cannot have an unbalanced fence and be intact. That is a mechanical, content-agnostic check nobody was running, and the reason is worth stating: every existing guard checks that the right things are **present**, and a truncation is an _absence below the last thing anyone asserts_. The ledger checks the file exists; the drift guards check specific claims appear; none checks the file is whole.
+    Restored, and a structural check for every shipped markdown surface is filed as its own work.
+  - **The lifecycle marker's collision with OpenSpec's archived lint is documented** where the marker itself is documented. `openspec validate --archived` counts raw checkboxes and fails every correctly-archived change, because the task that archives a change is unticked at archive time by construction. Anyone wiring that command into a pre-commit hook now finds the warning before the confusion.
+</Update>
+
 <Update label="0.35.0" description="2026-08-29">
   **The engine is now present at the transition it was absent from, and a guard caught a defect that existed only in the combination of two branches.**
 
