@@ -59,7 +59,9 @@ paused 11d · 3rd deferral of this epic
 Derived from the record — the reconcile links plus the live frames, as a set — rather than from a stored counter that a hand-edit would have to remember to increment. Silent on a _first_ deferral, because a detour is the mechanism working rather than a problem.
 
 <Note>
-  **A warning was considered and deliberately not built**, and the reason is structural rather than a judgment about thresholds. There is no `push-detour` verb: the PUSH below is a documented hand-edit of the state file, so the engine is not running at the moment a deferral is decided. A gate needs the engine to be present at the transition it gates, and here it is not — its only invitation comes _after_ the edit. Visibility is what can honestly be offered until that changes.
+  **A warning was considered and deliberately not built**, and the reason is structural rather than a judgment about thresholds. At the time there was no `push-detour` verb: the PUSH was a documented hand-edit, so the engine was not running at the moment a deferral was decided, and a gate needs the engine present at the transition it gates.
+
+  **0.35.0 removed that obstacle** — PUSH and POP are verbs now, so a gate has somewhere to live. Whether one is _warranted_ remains open, and limited by the same evidence problem: depth, elapsed time and repeat-count are different phenomena and not equally meaningful, so a threshold over any of them would need data this record does not yet have.
 
   Depth, elapsed time, and repeat-count are also different phenomena and not equally meaningful, so a threshold over any of them would be a number the engine cannot support.
 </Note>
@@ -76,7 +78,14 @@ When `/pm:detour` classifies an interruption as substantial, the following steps
     Set the current epic's `status` to `paused` in `.conductor/state.json`.
   </Step>
   <Step title="Push a frame onto detourStack">
-    Write the stack frame with `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume: true` (default) onto `.conductor/state.json`'s `detourStack[]`.
+    ```bash
+    conductor.mjs push-detour <pausedEpicId> --detour <detourEpicId> \
+      --reason "<why>" (--reconcile | --no-reconcile)
+    ```
+
+    **As of 0.35.0 this is a verb, not a hand-edit.** It used to say to edit `.conductor/state.json` directly — the one mechanism this project tells every agent never to use, at its most consequential transition. None of the engine's guarantees applied: no validation that the paused epic existed, no conflict guard, no read-back verification, no record it happened.
+
+    The verb pauses the epic, writes the frame, registers the detour with `role: "detour"`, sets it active and emits the Honcho line — in one guarded write. It refuses an unknown or archived epic and an empty reason, and it makes `--reconcile` / `--no-reconcile` an explicit choice rather than a default you can forget.
   </Step>
   <Step title="Create the detour epic">
     Register the detour as a new epic with `role: "detour"`, the appropriate lane, and usually priority `P0`. Add the cross-links: detour `resolves-blocker-for` parent; parent `may-invalidate` detour.
@@ -104,7 +113,13 @@ When the detour epic is archived and `/pm:resume` runs:
     Confirm the detour epic's status is `archived` and its work is committed or deployed. If not, it's not time to resume — finish the detour first.
   </Step>
   <Step title="Pop the top frame">
-    Remove the top frame from `detourStack[]` in `.conductor/state.json`. If `reconcileOnResume` was `true`, set `reconcileNeeded: true` on the paused epic before popping — this is the only place that obligation survives once the frame is gone.
+    ```bash
+    conductor.mjs pop-detour
+    ```
+
+    **Also a verb as of 0.35.0** — the resume instructions carried the identical hand-edit, and fixing only the PUSH would have left the sibling untouched.
+
+    It matters more here than on the push. POP removes the frame _before_ reconciliation runs, and the archive heal clears `reconcileNeeded` for any epic with no live frame — so done as two separate writes, the obligation is destroyed by the very heal meant to preserve it. The verb does the frame removal, the `reconcileNeeded` write and the active-pointer move in **one** state object and one write.
   </Step>
   <Step title="Restore the paused epic to active">
     Set the paused epic's `status` back to `active` and call `set-active <paused-id>`.

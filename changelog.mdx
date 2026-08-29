@@ -8,6 +8,36 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.35.0" description="2026-08-29">
+  **The engine is now present at the transition it was absent from, and a guard caught a defect that existed only in the combination of two branches.**
+
+  ### Added
+
+  - **`push-detour` and `pop-detour`.** The substantial-detour PUSH was a _documented hand-edit_ of the state file — the one mechanism this project tells every agent never to use, performed at the most consequential transition it has. None of the engine's guarantees applied to it: no validation, no conflict guard, no read-back verification, no record that it happened.
+    - **POP needed the same treatment**, and that was checked rather than assumed — the resume instructions spelled out the identical hand-edit. Fixing PUSH alone would have left the sibling untouched.
+    - One subtlety the verbs now handle that a hand-edit could not: POP removes the frame _before_ reconciliation runs, so the frame removal, the reconcile obligation and the active-pointer move happen in **one** state object and one write. Split across two writes, the obligation is cleared by the very heal that should preserve it.
+    - A defect a diff-scoped review could not have seen: the hand-edit set `role: "detour"`, and `add-epic` has no `--role` — which is precisely _why_ the hand-edit was documented. Replacing it without that would have registered every detour as a plain epic, silently costing the detour-context fallback and the role column.
+  - **Advisory ownership — `claim`, `unclaim`, `owners`** — records which session is working an epic, and whether a repository's conductor is quiescent.
+    - **Advisory, and exactly one surface refuses**: claiming over another session's _live_ claim exits non-zero having written nothing. So "two sessions both claim" has no silent-corruption reading. Everything else writes to a claimed epic unchanged, because a tool that refused to work over an advisory marker would not be advisory.
+    - **A stated TTL rather than a heartbeat.** A heartbeat nothing beats is a timestamp in costume, and it makes staleness wrong in _both_ directions — a live session reads stale after quiet work, a crashed one reads live long after it died.
+    - The override is `--steal`, deliberately **not** `--force`: the state writer reads `--force` globally off the argument list, so spelling it that way would have silently disabled optimistic concurrency as a side effect of the cooperative feature.
+  - **An optional activity log that ships with its reader.** A log nobody reads is a data graveyard, so the reader landed in the same change. It answers time-to-pickup, detour frequency, lane distribution and re-routes, gate verdicts in sequence — and **out-of-band writes**, meaning state revisions no event accounts for, which is a hand-edit turned from an archaeology exercise into a query.
+    - Events carry a revision _range_ rather than a number, because an ordinary update writes twice; single-number events would report every normal write as a hand-edit.
+    - Retention is bounded by design: segment rotation, a per-project cap pruned oldest-first, and a `purge-logs` verb that refuses without both a selector and an explicit confirmation.
+
+  ### Fixed
+
+  - **The flag-value rule is bound to the dispatch table, not to one registry.** It previously covered only the epic write surfaces, so it silently no-opped on a dozen other verbs — and **two of them had each independently hand-rolled the same check**, which is the tell that a rule was bound to a list rather than to the function it governs. A verb-level guard now reads the dispatcher's own table and fails if any dispatched verb is unclaimed by a declaration.
+
+  <Note>
+    **That guard immediately earned itself.** Two branches merged cleanly and the combination failed: four verbs from one branch were undeclared under the other's rule. It then **refused a shortcut** that would have declared their flags as value-bearing when they hand-parsed arguments and therefore never refused anything — a declaration that would have been false. The fix converted three verbs to the shared parser, which surfaced a further defect nothing else had: one verb had no unknown-flag allowlist at all, so a misspelled flag printed the entire report and exited 0.
+  </Note>
+
+  <Note>
+    **Not shipped, and worth saying why.** Adopting OpenSpec's CLI as a progress source was investigated and declined on evidence. `openspec validate --archived` **fails** this repository's own correctly-archived change — it counts raw checkboxes and knows nothing of the lifecycle marker that excludes a change's own archive task, which is unticked at archive time by construction. The two tools compute different quantities from one file and cannot be reconciled by a precedence rule.
+  </Note>
+</Update>
+
 <Update label="0.34.0" description="2026-08-29">
   **Two practices that only ever reached one repository now ship, a link type is no longer whatever you typed, and a flag with no value stops being accepted on some surfaces and refused on others.**
 
@@ -21,7 +51,7 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
     | Read by the engine | `depends-on`, `supersedes` |
     | Written as protocol state, nothing switches on it | `may-invalidate` |
     | Annotation only | `relates-to`, `blocks`, `resolves-blocker-for` |
-    Three bands rather than two because _known_ and _does something_ are different claims, and collapsing them would be the same overclaim the issue was about. Records already holding an unknown type **load, render, and are reported — never rewritten**: validation is on write only, and rewriting a stored type changes meaning rather than repairing a typo.
+    | Three bands rather than two because _known_ and _does something_ are different claims, and collapsing them would be the same overclaim the issue was about. Records already holding an unknown type **load, render, and are reported — never rewritten**: validation is on write only, and rewriting a stored type changes meaning rather than repairing a typo. |
   - **`verify-specs --headers` proposes the epics a design document already names.** Backfilling `specPath` revealed that the documents declare their own epics in a header — and that deriving the mapping from _filenames_ placed 8 of 10 while structurally missing exactly the many-to-one cases the field exists for. The parse is label-agnostic and bounded to the leading metadata block, chosen empirically against all ten real documents: **26 of 26 ids, zero false candidates**. It proposes; you confirm. A header id naming no epic in the record is reported as a finding, from covered documents too.
 
   ### Fixed

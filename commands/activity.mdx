@@ -1,0 +1,43 @@
+---
+title: "/pm:activity — An Optional Log That Ships With Its Reader"
+sidebarTitle: "/pm:activity"
+description: "PM recorded nothing about its own use, so every question about its effectiveness was answered by forensics. Off by default, bounded by design, and it answers the hand-edit question directly."
+icon: "list-timeline"
+---
+
+```bash
+conductor.mjs set-activity-log on | off
+conductor.mjs activity [--since <when>] [--epic <id>] [--json]
+conductor.mjs purge-logs --kind <k> [--keep N] [--over <size>] [--older-than <when>] [--dry-run] --yes
+```
+
+## Why it ships with a reader, and would not ship without one
+
+A log nobody reads is a data graveyard — and that argument has been used in this project to **decline** things, so it could not be waved away here. The reader landed in the same change as the writer.
+
+It answers questions that were previously archaeology:
+
+| Question | Previously |
+| --- | --- |
+| How long between an epic being queued and picked up? | read the git log and guess |
+| How often is work detoured, and off which epics? | count rows in a log by hand |
+| How is work distributed across lanes, and what got re-routed? | not answerable |
+| In what order did gate verdicts actually land? | reconstruct from timestamps |
+| **Were there writes the conductor did not make?** | **a `jq` sweep across every repo** |
+
+That last row is the one that earns its cost. A **hand-edit** of the state file shows up as a revision no recorded event accounts for — the failure mode this project has repeatedly found and repeatedly had to dig for.
+
+<Note>
+  **The detail that makes that section signal rather than noise:** events carry a revision _range_, not a single number. An ordinary update writes twice — once for the change, once for the re-render — so single-number events would flag every normal write as an out-of-band one, and the section would be pure noise on day one.
+</Note>
+
+## Bounded by design
+
+A log that grows without limit in every repository is a papercut every user inherits, so the limits are part of the feature rather than a later addition:
+
+- **Segmented** files named by timestamp, so "since when" and "how old" are answerable from the filename without opening anything.
+- **A per-project cap**, pruned oldest-first at a rotation boundary — and never down to zero segments.
+- **`purge-logs` refuses twice**: nothing without a selector, and nothing without an explicit confirmation flag. A `--dry-run` shows what would go.
+- The log directory is **git-ignored automatically**, so it never becomes a permanently untracked file in your working tree.
+
+**Off by default.** `set-activity-log on` is a deliberate choice, and `off` stops it without removing what was already recorded.
