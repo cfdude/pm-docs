@@ -1,0 +1,48 @@
+---
+title: "/pm:claim — Advisory Ownership When More Than One Session Is Working"
+sidebarTitle: "/pm:claim"
+description: "Record which session owns an epic, and whether a repository's conductor is quiescent. Advisory by design — exactly one surface refuses, and it is the one where two claims would otherwise both win."
+icon: "hand"
+---
+
+When more than one session works the same repository — a fan-out across agents, two terminals, a teammate — nothing recorded who was on what. `claim` records it.
+
+```bash
+conductor.mjs claim <epic-id> [--ttl <minutes>] [--steal]
+conductor.mjs claim --repo                 # "a session is working here"
+conductor.mjs unclaim <epic-id> | --repo
+conductor.mjs owners [--json]
+```
+
+## Advisory, and what that actually means
+
+An advisory marker nobody honours is worse than none, because it _looks_ like coordination. So the line is drawn precisely:
+
+**Exactly one surface refuses** — claiming over another session's **live** claim exits non-zero having written nothing. That is what gives "two sessions both claim" a defined outcome instead of a silent race: the loser performs no write at all.
+
+**Everything else writes to a claimed epic unchanged.** A tool that refused to work over an advisory marker would not be advisory — it would be a lock wearing the wrong name, and it would strand work the moment a session died holding one.
+
+<Note>
+  **The override is `--steal`, and the name is load-bearing.** The state writer reads `--force` globally off the argument list to bypass its revision guard, so spelling this override that way would have silently disabled optimistic concurrency as a side effect of a cooperative feature. `claim --steal` still exits with the conflict code if the state moved underneath it.
+</Note>
+
+## What expires a claim
+
+A **stated TTL**, carried on the record — not a heartbeat.
+
+A heartbeat nothing beats is a creation timestamp in costume, and it makes staleness wrong in _both_ directions: a live session reads stale after a stretch of honest quiet work, and a crashed one reads live until its TTL runs from its last write. The only place a heartbeat could be bumped automatically is the state writer, which does not know _which_ epic is being written.
+
+Defaults are 120 minutes for an epic and **30 for the repository marker** — shorter on purpose, because a crashed session holding _"someone is working here"_ for two hours is exactly the false signal this feature exists to avoid.
+
+The TTL is **read**, never swept. Nothing rewrites state to expire a claim, which is what lets `owners` and `integrity` agree without either of them writing.
+
+## What reports a stale one
+
+- **`owners`** when you ask — and `owners --json` answers `quiescent: true` when nothing is claimed, which is the "is anyone working in this repo" question.
+- **`integrity`** when nobody thinks to ask. That is the case that matters: a stale claim is left by a session that is no longer there to ask.
+
+Archiving an epic **clears** its claim rather than refusing the archive — refusing would be the conductor declining to finish work over an advisory note.
+
+<Card title="Activity log" icon="list-timeline" href="/commands/status">
+  The companion question — not who owns work now, but what happened and when.
+</Card>

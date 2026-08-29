@@ -89,6 +89,8 @@
               "commands/cross-spec-review",
               "commands/lane-routing",
               "commands/gate-guard",
+              "commands/claim",
+              "commands/activity",
               "commands/feedback"
             ]
           }
