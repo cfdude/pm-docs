@@ -14,8 +14,9 @@ The first step of `/pm:detour` is always classification. Do not start fixing bef
   <Card title="Minimal detour" icon="wrench">
     Small, self-contained, no design ambiguity. Fits before the next context compaction and doesn't reshape the current proposal.
 
-    **Path:** Fix → test → commit → `log-detour "<what you fixed>"` → resume. No stack entry. No proposal. The log call appends a timestamped line + commit SHA to `.conductor/detours.log`.
+    **Path:** Fix → test → commit → `log-detour "<what you fixed>"` → resume. No stack entry. No proposal. The log call appends a timestamped line \+ commit SHA to `.conductor/detours.log`.
   </Card>
+
   <Card title="Substantial detour" icon="layer-group">
     Needs its own design, changes shared behavior, or is multi-step.
 
@@ -38,7 +39,7 @@ A detour stack frame records everything needed to restore context after the deto
 ```
 
 | Field | Description |
-|-------|-------------|
+| --- | --- |
 | `pausedEpic` | The epic id that was active when the interruption hit. |
 | `pausedAt` | ISO timestamp of when the PUSH occurred. |
 | `reason` | A concrete human-readable explanation of why work was parked. |
@@ -46,6 +47,22 @@ A detour stack frame records everything needed to restore context after the deto
 | `reconcileOnResume` | When `true`, the reconcile gate fires automatically on POP. Default `true` whenever the detour touches code or behavior the paused epic depends on. |
 
 The stack is LIFO — the most recent push is always what `/pm:resume` pops. Multiple nested detours are supported; each POP restores exactly one level.
+
+## Repeated deferral is visible
+
+**New in 0.34.0.** An epic parked more than once now says so, in the stack block and in the Honcho line:
+
+```text
+paused 11d · 3rd deferral of this epic
+```
+
+Derived from the record — the reconcile links plus the live frames, as a set — rather than from a stored counter that a hand-edit would have to remember to increment. Silent on a _first_ deferral, because a detour is the mechanism working rather than a problem.
+
+<Note>
+  **A warning was considered and deliberately not built**, and the reason is structural rather than a judgment about thresholds. There is no `push-detour` verb: the PUSH below is a documented hand-edit of the state file, so the engine is not running at the moment a deferral is decided. A gate needs the engine to be present at the transition it gates, and here it is not — its only invitation comes _after_ the edit. Visibility is what can honestly be offered until that changes.
+
+  Depth, elapsed time, and repeat-count are also different phenomena and not equally meaningful, so a threshold over any of them would be a number the engine cannot support.
+</Note>
 
 ## PUSH: entering a substantial detour
 
@@ -69,9 +86,11 @@ When `/pm:detour` classifies an interruption as substantial, the following steps
   </Step>
   <Step title="Write a Honcho memory">
     Get the ready-to-copy memory line and log it durably:
+
     ```bash
     node "$ENGINE" honcho-memory push <parent-epic-id> "<reason>"
     ```
+
     This prints `paused <parent> for <reason>` and appends a timestamped copy to `.conductor/honcho-memories.log`. Paste the printed line into your Honcho MCP memory tool call — the engine only formats and logs the string, it never calls Honcho itself.
   </Step>
 </Steps>
