@@ -108,6 +108,33 @@ Catch up on work already in flight **only before the first attribution**, in lan
   **Never attribute the commit that moves `openspec/changes/<id>/` under `archive/`**, or any commit that only relocates or deletes a change's artifacts. That move lands after the reviewed range by construction, so attributing it makes the epic's own Gate 2 stale at the instant the archive gate reads it.
 </Warning>
 
+## Stories, and the third state a checklist needs
+
+Stories are inline progress on an epic — the highest-priority progress source, ahead of a plan or `tasks.md`. As of 0.31.0 they can be created **atomically**, so an epic arrives with its milestones instead of acquiring them one call at a time:
+
+```bash
+conductor.mjs add-epic --id <id> --title "<t>" --lane <lane> --priority <P> \
+  --add-story "First milestone" --add-story "Second milestone"
+```
+
+`--add-story` repeats and works on `add-epic`, `add-many` (batch entries take a `stories` array), and `update-epic`.
+
+### Work that will not be done
+
+A checklist needs three states, not two: open, completed, and **deliberately not being done**.
+
+```bash
+conductor.mjs update-epic <id> --story <n> --wont-do "<reason>"
+```
+
+The reason is required, and a recorded disposition is never silently replaced. **The row and its reason always survive** — deleting the story would destroy the record that the work was ever projected, which is exactly what a disposition exists to preserve.
+
+A disposed story leaves **both** sides of the ratio, rendering `3/3 stories · 2 disposed` — the same shape a lifecycle-marked task produces. Never `5/5`, which would claim completion nobody earned; and never `3/5`, which would leave the archive gate refusing forever.
+
+<Note>
+  **The archive gate already refused an epic with an unticked story** — that has been true since dispositions shipped, because outstanding work is read from stories first. What was missing was a way _out_ for work that was genuinely dropped: the refusal pointed at a lifecycle marker that lives on a task's line, and an inline story has no task line to carry one. `--wont-do` is that key. No new refusal was added in 0.31.0.
+</Note>
+
 ## Ending an epic — the disposition
 
 An epic, a story, a deferral, or a release exclusion **ends by recording a terminal disposition carrying its required reason — never by removing the record.** Deletion removes the record of projected work, which is precisely what a disposition exists to preserve.
@@ -145,6 +172,7 @@ conductor.mjs remove-epic <id> [--cascade]
 - **`--cascade`** removes the epic and all its descendants together in one atomic write. The preview table from the blocked attempt and the `--cascade` blast radius always agree — confirming from that table is confirming the real deletion set.
 - **Dangling links are cleaned up automatically.** Any other epic's `links[]` entries that reference the removed id are stripped, and the command reports which epics were affected.
 - If the removed epic was the active epic, the `.active` pointer is cleared automatically.
+- **A removal now survives the next sync** (0.31.0). Removing an epic that claimed a plan writes a **tombstone** recording that the artifact must not be re-registered — otherwise the next `/pm:sync` would find the orphaned plan on disk and register it right back. Attaching that plan to an epic (`update-epic <id> --plan <path>`) clears the tombstone.
 
 <Warning>
   `remove-epic` is a hard delete — recoverable only via `git history`. Before using `--cascade`, review the blast-radius table that the blocked attempt prints and confirm explicitly. The engine has no interactive prompt; that confirmation step is your responsibility.

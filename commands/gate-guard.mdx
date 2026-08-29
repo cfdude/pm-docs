@@ -12,6 +12,7 @@ Every `Edit`, `Write`, and `NotebookEdit` call is intercepted by the hook. Befor
 
 - If `reconcileNeeded` is `true`: the tool call is **blocked** with a message directing you to run the reconciler agent via `/pm:resume`.
 - If `reconcileNeeded` is `false` or absent: the tool call proceeds normally. Epics with no pending reconcile are completely unaffected.
+- **If the active epic has been archived, nothing is blocked** (0.31.0). `state.active` can legitimately name an archived epic for a stretch — the pointer is cleared on write paths like `render`, `sync` and `commit-nudge`, and this hook is read-only, so it can observe the window between. An epic that has ended owes no obligation, and a stale `reconcileNeeded` on one used to wedge writes with no CLI way out, since the block below is deliberately unreachable by `set-gate-guard off`. The filter sits at the point the pointer is resolved, so any future obligation added here inherits it.
 
 ## Always on for reconcile-owed epics
 
@@ -35,9 +36,9 @@ This flag is reserved for any future generalization of the hook to additional ch
 Run `/pm:gate-guard` at any time to inspect the current state of the hook — whether `gateGuard` is on or off in `state.json`, and whether any epic currently carries `reconcileNeeded: true`. This is the fastest way to understand why a write was blocked without digging into `state.json` directly.
 
 <Warning>
-If you see "blocked by gate guard" on an `Edit` or `Write` call, the only resolution is to run `/pm:resume` and complete the reconcile gate. There is no workaround — `set-gate-guard off` will not help here.
+  If you see "blocked by gate guard" on an `Edit` or `Write` call, the only resolution is to run `/pm:resume` and complete the reconcile gate. There is no workaround — `set-gate-guard off` will not help here.
 </Warning>
 
 <Note>
-The gate guard hook is dormant until `/pm:init` has been run in a project. It activates only in projects that have been initialized and have a `.conductor/state.json` present.
+  The gate guard hook is dormant until `/pm:init` has been run in a project. It activates only in projects that have been initialized and have a `.conductor/state.json` present.
 </Note>
