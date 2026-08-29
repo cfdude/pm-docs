@@ -88,6 +88,14 @@ The nudge is non-blocking. It surfaces the suggestion and moves on — it does n
   Every read is three-valued: no git, not a repository, no reflog, or a missing watermark all fall back to the previous behaviour rather than erroring.
 </Note>
 
+**As of 0.33.0 it also names the attribution command.** The gate procedure asks you to record each commit against its epic _as the commit is made_ — and until now nothing checked until the archive gate read the array, by which time the commits exist and the append-only ordering may already be broken. Now that the hook knows a commit actually landed, it prints the exact runnable command for the epic that commit belongs to.
+
+It names the **detour** epic while a detour is live, never the paused parent. And it is **louder exactly once**: while an epic has attributed nothing, the clause carries the catch-up-in-order rule, because that is the only state in which catching up is still possible. After the first attribution it is one line.
+
+<Warning>
+  **A commit that only moves or deletes a change's artifacts must not be attributed** — the `/opsx:archive` move above all. That commit lands after the reviewed range by construction, so attributing it makes the epic's own Gate 2 read stale at the instant the archive gate checks it. The hook states the rule; it never classifies your commit itself.
+</Warning>
+
 <Tip>
   Keep `PROJECT.md` open in a split pane. It updates after every `render` call so you can see the live queue, active epic, and detour stack at a glance without running a command.
 </Tip>

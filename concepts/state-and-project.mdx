@@ -88,6 +88,12 @@ Every minimal detour is logged here by the `log-detour` subcommand. Substantial 
   **Two corrections shipped in 0.32.0.** The hook used to log a spurious minimal detour for a perfectly ordinary commit when **no epic was active** — there is no work to detour _from_ in that case, so nothing is logged now. And the detection reads the repository rather than the command text, so a commit in any flag form is seen and a command that merely _mentions_ `git commit` is not.
 </Note>
 
+<Note>
+  **In 0.33.0 the trail stopped duplicating itself.** A commit-derived row is refused when the trail already holds one for that `(sha, kind)` — which mattered because the fallback rung has no memory of what it already logged. A `MINIMAL` detour is deliberately exempt: it records what the agent _declared_, not what git observed, so two of them at one commit are two real events. A `-` sha means "cannot tell" and is never treated as an identity.
+
+  That duplication was half of why `PROJECT.md` was never clean — a bookkeeping commit appended a row, which changed the file, which produced another commit. The other half was a bookkeeping filter that guarded one branch of the hook and had never been applied to the identical branch beside it.
+</Note>
+
 This log is never modified by hand. If you need to audit what happened during a session or trace when a particular change was introduced as a side-effect of a detour, this is the file to read.
 
 ## CLAUDE.md rules block
@@ -100,6 +106,10 @@ The rules block is:
 - **Re-injected by the `SessionStart` hook** via `additionalContext` on every session open, resume, and compaction recovery, so the rules survive context loss.
 - **Refreshable via `/pm:upgrade`** after a plugin update — run it to pull in any new rules or behavioral changes from the latest version.
 - **Idempotent** — deleting the block from `CLAUDE.md` and re-running `/pm:init` or `/pm:upgrade` restores it safely. To permanently opt out, delete the block and do not run upgrade.
+
+<Warning>
+  **`CLAUDE_PROJECT_DIR` decides which repository every path below belongs to.** When it is set, it overrides the working directory — which is correct and load-bearing for hooks and cross-repo dispatch, and silently catastrophic when the value is stale. As of 0.33.0 the engine warns, naming both repositories and how to undo it, when the variable resolves elsewhere **and** the directory you are standing in has a conductor of its own. It warns and never refuses: the defect was that a redirect looked identical in the output, not that redirects happen.
+</Warning>
 
 <Warning>
   Never hand-edit `state.json` directly. Use PM commands. Bypassing the engine means render timestamps, active-epic invariants, and cross-link consistency can silently diverge. If you must recover from a bad state, use `git checkout .conductor/state.json` to restore the last known-good version — PM's state changes are committed regularly, so git history is always the recovery path.

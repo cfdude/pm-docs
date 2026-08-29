@@ -53,6 +53,28 @@ This is a pure agent-driven workflow. **The PM engine (`conductor.mjs`) is never
 
 `/pm:feedback` only targets `cfdude/pm`. It is not a general-purpose issue filer and should not be pointed at other repos.
 
+## If you do not have `gh` — three channels, in order
+
+**New in 0.33.0.** The workflow above assumes the `gh` CLI **and** an authenticated GitHub account. That dependency was never declared, so a user without either got a command that simply failed. It is now stated, and two channels exist that need neither:
+
+<Steps>
+  <Step title="gh, when it is available and authenticated">
+    Preferred, because it is the only channel that can also search for near-duplicates and comment on a match. Both `command -v gh` and `gh auth status` must pass.
+  </Step>
+  <Step title="A prefilled issue URL">
+    A `.../issues/new` link with the title and body already filled in. Needs no CLI and no prior authentication — you sign in only if you are not already, and only to press submit.
+  </Step>
+  <Step title="Email">
+    `bugs@pm-plugin.dev`, for the case where neither of the above is usable.
+  </Step>
+</Steps>
+
+**On every path the report is written to `.conductor/feedback/` first**, so it survives regardless of which channel is available — and regardless of whether you send it at all.
+
+<Note>
+  **`/pm:sync` is handled differently on purpose.** Listing open issues is a _read_ with no credential-free substitute — a prefilled URL cannot enumerate anything. So the inward sync procedure gets a preflight that **stops and says so** rather than reporting a sync nobody performed. Filing degrades to another channel; reading cannot, and pretending otherwise would be worse than the missing dependency.
+</Note>
+
 ## Proactive adoption
 
 The CLAUDE.md rules block includes an unconditional "Feedback" section instructing your agent to use `/pm:feedback` proactively — not just when you ask for it. If it hits a bug, a missing CLI verb, an unexpected limitation, or repeated friction working with PM, it should file it (or ask you "want me to file this as feedback?") rather than silently working around it. This exists because the command shipped once and went unused: a real, recurring friction point (hand-editing `.conductor/state.json` to flip a story's `done` flag, since no CLI verb existed for it) recurred across several separate sessions before anyone reported it.

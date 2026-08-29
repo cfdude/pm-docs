@@ -88,6 +88,16 @@ It lists every design document under the root with the epics drawn from it, and 
 
 Coverage is status-blind: an archived epic for one chunk of a design **is** coverage of that chunk.
 
+## Which verbs write — `verb-effects`
+
+`render` writes `PROJECT.md`. `brief` does not. Until 0.33.0 nothing said so, and the only way to find out was to run one and check `git status`.
+
+Every dispatched verb now carries a declared effect — `mutates` or `read-only` — and the declaration is **verified rather than asserted**: the suite checks it covers every verb the dispatcher actually has, then _runs_ each read-only verb against a repository with a render pending and hashes the tree by content **and** mtime.
+
+<Note>
+  That measurement corrected two claims while it was being written. `render` is content-conditional — it skips the rewrite when only the timestamp would change — so a content-only hash reported it clean, which would have shipped a wrong declaration. It is still `mutates`: **idempotent-when-nothing-changed is not the same as read-only**, and both facts are now asserted so they cannot be conflated. Adding mtime then caught three more verbs writing on every call.
+</Note>
+
 ## Release planning — `release`
 
 A release is a named grouping of epics the agent declares: an id, intent prose, an optional target, and the epics deliberately cut from it. It exists because a release's scoping judgments otherwise survive only in the session that made them.
