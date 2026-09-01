@@ -105,12 +105,17 @@
       "chatgpt",
       "claude",
       "cursor",
-      "vscode"
+      "vscode",
+      "add-mcp"
     ]
   },
   "footer": {
     "socials": {
       "github": "https://github.com/cfdude/pm"
     }
+  },
+  "description": "Project Manager (PM) is a lightweight harness above OpenSpec and Superpowers that keeps a Claude Code project on track — across detours, context compaction, and however many epics are in flight at once.",
+  "seo": {
+    "indexing": "all"
   }
 }
