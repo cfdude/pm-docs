@@ -8,6 +8,33 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.37.0" description="2026-08-31">
+  **Help that answers the question actually asked.** `--help` was verb-blind and the emitted rules block carried no route to documentation at all, so an agent that needed a verb's flags read the engine's source — which is exactly what a session bringing another repo up to date did, and said so. Both halves ship together: a local channel that cannot lie about the installed engine, and a pointer to the docs for everything the engine does not know.
+
+  ### Added
+
+  - **`<verb> --help` — per-verb, projected from the flag registry.** Naming a verb prints that verb's own flag surface: every flag it accepts, which take no value, which repeat, and the phrase each one's own refusal ends in. Naming none still prints the verb list. Every line is **derived** from the same registry rows the unknown-flag allowlists read, so a row that grows the allowlist grows the help in the same edit and help cannot advertise a flag the parser refuses. A per-verb help table was refused: that is a rule bound to a list rather than to the function that governs it, and it would be stale the first time a flag was added.
+  - **A closed-enum flag names its legal values.** `--outcome`, `--status`, `--lane`, `--priority`, `--platform`, `--mode`, `--level`, `--direction`, `--gate` and `--verdict` all render their real value space, projected from the same constants the engine validates against. Gate 2 measured the gap this closes: of the 92 value-bearing (verb, flag) pairs, only 21 rendered anything more specific than `<a value>`, and **not one closed enum named its values** — so a reader wanting to know what `--outcome` accepts still had to open `scripts/lib/`, which is the thing this release exists to stop. Flags with no closed set still render `<a value>`; that remainder is visible rather than papered over.
+  - **A verb that takes no flags says so.** 21 of the 48 legitimately take none. Printing an empty list would make "takes none" and "nobody declared this verb yet" look identical, which is the ambiguity that declaration exists to remove.
+  - **A "Getting help with pm" section in the emitted rules block.** Every managed repo receives it on the next `/pm:upgrade`. Measured across all 408 emitted lines and all three platform variants before this release: **0** occurrences of the engine binary, of any URL, of `MCP`, of `--help`, of `pm-plugin.dev`, of `SKILL.md`, of `README` — while the block hardcodes eight flags in a single `add-epic` recipe. It taught flags by worked example and offered no way to enumerate them.
+
+  ### Fixed
+
+  - **`add-epic --help` advertised `--clear-links`, a flag `add-epic` refuses** — caught at Gate 2, and it falsified this release's own headline invariant. The cause was one field doing double duty: `requires` is the tail of a refusal message _and_, new here, the help signature. `--link`'s reads "…to empty an epic's links, say so with `--clear-links`" — correct in a refusal, a ghost flag in a signature. Rows now carry a separate `placeholder` for the signature.
+  - **The guard that found it is now the test.** A mechanical sweep asserts that for **every** one of the 48 verbs, every `--token` its help prints is a flag that verb accepts. The test it replaces hardcoded four names on one verb — the sibling-miss this repo's gate procedure names as its dominant defect class, and precisely why a ghost living inside another flag's placeholder text was invisible to it.
+
+  ### Changed
+
+  - **`<verb> --help` and `<verb> -h` no longer print the global usage line.** That is the point of the release rather than a side effect. The short-circuit itself is unchanged and keeps its original property: a help flag still fires **before** dispatch, reaches no subcommand, and cannot be consumed as data — the bug that put it there was `log-detour --help` writing a real detour entry described as `--help`, into an append-only log with no verb to remove it.
+  - **Documentation gaps closed** — `--description` on `add-epic` and `add-many`, `--diff-summary`, `--platform`, and the `write-rules` / `rules-target` verbs, which had no command doc at all.
+
+  ### Notes
+
+  - **No migration.** Nothing in this release changes the shape of `state.json`.
+  - **The skew warning embeds no version number, deliberately.** The block a repo reads must be identical before and after an upgrade — a migration records behavior, it does not alter what anyone reads — and the block is static while the plugin is not, so an embedded version is a snapshot that goes stale in exactly the skew case it was meant to warn about. It routes to `/pm:changelog`, which computes the answer.
+  - **Existing repos will see exactly one addition to the emitted block**, the "Getting help with pm" section. Treat a second as a regression.
+</Update>
+
 <Update label="0.36.0" description="2026-08-29">
   **PM stops imposing a house style — and a shipped file that had been quietly broken for four releases is whole again.**
 
