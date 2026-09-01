@@ -55,9 +55,9 @@ These aren't benchmarks — they're real figures pulled mechanically from PM's o
 
 | Metric | Value |
 | --- | --- |
-| Releases shipped end-to-end (spec → build → test → changelog → release) | **52** |
-| Tests in the engine | **1,049** |
-| Lines of engine code (`scripts/conductor.mjs` \+ `scripts/lib/*.mjs`) | **~12,100** |
+| Releases shipped end-to-end (spec → build → test → changelog → release) | **54** |
+| Tests in the engine | **1,069** |
+| Lines of engine code (`scripts/conductor.mjs` \+ `scripts/lib/*.mjs`) | **~12,300** |
 | External dependencies | **0** |
 
 Every multi-agent hierarchy dispatch runs worktree-isolated and converges back through sequential merge — every conflict seen so far has been mechanical (a shared CHANGELOG header, a usage string), never a real logic collision. The engine is Node 18\+ built-ins only.
@@ -70,6 +70,12 @@ Every multi-agent hierarchy dispatch runs worktree-isolated and converges back t
   PM's design choices aren't novel in isolation — they're borrowed, deliberately, from patterns that already work at scale elsewhere: policy-as-code, worktree isolation, an explicit interrupt stack, instruction-layer-only architecture.
 </Card>
 
-## AI-agent reference
+## AI-agent reference — two channels, and only one of them can lie
 
-This site publishes [`llms.txt`](https://pm-plugin.dev/llms.txt) — a lightweight (~7KB) index of every doc page, meant for an AI agent to fetch on demand — and [`llms-full.txt`](https://pm-plugin.dev/llms-full.txt), the entire site as one document (~200KB, tens of thousands of tokens). Use `llms.txt` by default; reach for `llms-full.txt` only when you genuinely need the complete reference in one shot.
+**What your engine accepts: ask your engine.** Since 0.37.0, `--help` is per-verb — `node "$ENGINE" <verb> --help` prints that verb's real flag surface: every flag, which take no value, which repeat, and the legal values of every closed enum (`--outcome`, `--status`, `--lane`, `--priority`, `--platform`). It is projected from the same registry rows the engine's unknown-flag guards read, so it is version-exact by construction and cannot advertise a flag your parser refuses. Reach for it before reading engine source, and before guessing a flag name.
+
+**Procedure, concepts and rationale: this site.** It publishes [`llms.txt`](https://pm-plugin.dev/llms.txt) — a lightweight (~9KB) index of every doc page, whose entries are already markdown URLs — and a free, no-auth MCP server at `https://pm-plugin.dev/mcp` that answers a targeted question in one call. [`llms-full.txt`](https://pm-plugin.dev/llms-full.txt) is the entire site as one document (~360KB, tens of thousands of tokens); reach for it only when you genuinely need the complete reference in one shot.
+
+<Note>
+  This site documents the **latest** release. If it shows a flag your engine refuses, that is a version gap rather than a bug — `/pm:changelog` says what your repo is missing.
+</Note>
