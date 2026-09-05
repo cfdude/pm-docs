@@ -112,9 +112,11 @@ All validations from `add-epic` apply: no self-parent, no cycles, known status v
 | `--outcome` | `disposition` | `delivered`, `killed`, `superseded`, or `abandoned`. |
 | `--reason` | `disposition` | Required for every outcome except `delivered`. |
 | `--carried-to` | `disposition` | Where unfinished work went. |
-| `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`. |
-| `--declined-deferral` | `deferralAssertion` | **Repeatable** — `"<what>:<why not>"`. |
+| `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`. Splits on the first colon, which is correct here because the left half is an epic id and cannot contain one; a colon in `<section>` is part of the section. |
+| `--declined-deferral` | `deferralAssertion` | **Repeatable** — `"<what>::<why not>"`. Both halves are free text, so `::` separates them explicitly. A single colon still works where the value carries only one; two or more with no `::` are **refused** rather than guessed, and both halves must be non-empty. |
 | `--no-deferrals` | `deferralAssertion` | The explicit "there are none". |
+| `--withdraw-commit` | `attributedCommits`, `withdrawnCommits` | **Repeatable**. Removes ONE occurrence of a sha this epic attributed, and records why. Refuses a sha the epic never attributed. |
+| `--withdrawal-reason` | `withdrawnCommits` | Required by `--withdraw-commit`, and deliberately **not** `--reason` — that one is the disposition's. |
 
 `--lane` and `--plan` were settable only at creation, so the sole correction for a mis-routed epic was to remove it and register it again — discarding its start time, its gate verdicts, its links and its stories. Both are now in-place field writes.
 
@@ -127,6 +129,20 @@ conductor.mjs update-epic <id> --attribute-commit <sha>
 ```
 
 The engine infers attribution from **nothing** — not the files a commit touches, not an epic id in a message — so an unattributed commit is one the epic's Gate 2 cannot be checked against. The flag repeats because a non-repeatable flag is overwritten on each occurrence, which would silently turn two hashes into one and destroy the order that gives the array its meaning.
+
+### Withdrawing one — when the commit it named is gone
+
+```bash
+conductor.mjs update-epic <id> --withdraw-commit <sha> --withdrawal-reason "<why>"
+```
+
+Append-only is right and stays: order carries meaning, and the last entry is the endpoint a recorded Gate 2 `headSha` is compared against. But _cannot be reordered_ is a different claim from _can never be corrected_. A `git reset` is an ordinary operation, and attributing at the moment of each commit means an attribution can outlive its commit through no error of process — after which `integrity` reports a sha the repository cannot resolve, forever.
+
+The withdrawal is **recorded**, not erased: `withdrawnCommits` keeps `{sha, reason, withdrawnAt}` beside the array rather than inside it, which is what keeps the endpoint rule intact. It removes **one** occurrence per request, because the array does not de-duplicate and removing every copy would move that endpoint as a side effect.
+
+<Warning>
+  **Withdrawing every attribution does not clear a Gate 2 obligation.** An epic that attributed, then withdrew, and now attributes nothing reads `attribution-withdrawn` — not `none-attributed` — and the archive gate refuses it by name. A withdrawal says a sha was _wrong_; it never says the work was never done.
+</Warning>
 
 Catch up on work already in flight **only before the first attribution**, in landing order; after that, attribute forward only. The array is append-only, and its **last** entry is what a recorded Gate 2 `headSha` is compared against — so a late-inserted ancestor reads as a stale verdict and refuses the archive.
 
@@ -273,4 +289,6 @@ An archive that reached `archived` with no review at all records **`verdict: "un
 
 <Note>
   `update-epic --status archived --outcome delivered` on an `openspec`-lane epic requires a passing, non-stale Gate 2 verdict already recorded via `record-gate-review`. If it is missing, `fail`, `ungated`, or stale, the transition is rejected with a clear error naming what's missing. As of 0.27.0 this gate binds **every** path that can reach `archived` — including the archive-drift heal reached from `upgrade`, `render`, the commit nudge, and `sync` — not just this verb. Non-openspec epics are unaffected.
+
+  **As of 0.38.0 a verdict records on any lane.** `set-review-mode` is lane-agnostic and names a Superpowers task review in its own table, so pm told every lane to run reviews and could record the verdict for one of them — leaving every other lane's evidence as prose nothing compares, which meant it could never read stale and `integrity` could not see it. **The archive gate above is unchanged and stays `openspec`-only**: recording evidence where a review happened must not create an obligation where none existed. Note that a `pass` requires both shas; a `fail` may omit them.
 </Note>
