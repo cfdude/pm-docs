@@ -8,6 +8,29 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.39.0" description="2026-09-05">
+  **Things that go missing without anything noticing.** Four items under one class: a shipped file that lost its tail, an agent transcript thrown away, a test helper whose sibling silently went stale, and a reported stdout loss that turned out not to exist.
+
+  ### Added
+
+  - **A structural check over every shipped markdown file.** A skill lost 78 lines in 0.31.0 and no check noticed for five releases, because **every existing guard asserts things are PRESENT** — and a truncation is an absence _below_ the last thing anyone asserts. Five assertions: an unclosed code fence, unterminated frontmatter, a heading whose section is empty, a table header with no rows, an unbalanced `<details>`. Each was **measured at zero violations across every shipped file** before adoption; anything scoring above zero was rejected rather than tuned.
+    The fence check is a _tracker_, not line parity, and the difference is load-bearing: a four-backtick fence holding a three-backtick example has even parity while well-formed, and truncating inside it _keeps_ parity even — so parity would call the broken file clean.
+    **Proven against real history**, which is the strongest evidence available: the test reads `skills/conductor/SKILL.md` out of git at three release commits and requires the intact one to pass and the two truncated ones to report `unclosed-fence`. It would have fired in 0.31.0's own CI run.
+    **And here is its reach, measured rather than implied:** excising blocks at every offset in real files, the detection rate on the mid-document shape the original truncation actually took is **9.3%** on `SKILL.md`, 3.4% on `commands/epic.md`, 31.0% on `README.md`. A real guard against a real defect — not a general truncation detector.
+  - **A guard on write-before-exit output size.** A process that writes a large payload to a pipe and then calls `process.exit()` truncates at the buffer, because exit skips the flush — measured at 65,536 bytes. Unreachable today (the largest such path is 1,286 bytes), which was a property of current output sizes that nothing held.
+
+  ### Fixed
+
+  - **The EDD harness threw away the agent's own output.** The runner captured stdout and the adapter copied four metrics out of the result and dropped the rest, so the only way to see what an agent actually said was to run it again — 90 seconds, and a different sample against a non-deterministic surface. `stderr` was captured **nowhere**. Both are carried now, **whole and never excerpted**: a cap is the silent-truncation shape this release's first item is about. A timed-out run keeps its partial transcript too — `TimeoutExpired` carries it, and it was being discarded.
+  - **A duplicated test helper** that two files had to keep identical, with nothing enforcing it. Hoisted to one definition — a byte-identity test between copies was rejected, because it _detects_ divergence where one definition _prevents_ it.
+  - **0.35.0 shipped with a heading and no changelog entry at all**, and nothing noticed for four releases. Found by the new check — which had been excluding `CHANGELOG.md`, and that exclusion is what hid it. Backfilled from the release's own PR and commit, marked as recovered rather than passed off as original.
+
+  ### Notes
+
+  - **No migration.** Nothing in this release changes the shape of `state.json`, and the emitted rules block is byte-identical across all three platforms — managed repos receive no change.
+  - **One reported bug was retracted rather than fixed.** A claimed stdout loss under `PM_ENGINE_DELEGATION` could not be reproduced in 34 full-suite runs, and its stated mechanism was impossible: delegation cannot fire from the test harness at all, and the handoff hands the child the parent's own descriptor. Both facts are now tests, so the mechanism cannot be re-derived from the issue text later.
+</Update>
+
 <Update label="0.38.0" description="2026-09-04">
   **The record says what actually happened.** Four defects under one invariant: a write must be readable back, and a reported write must have happened. Three were reported from the field within a day of each other; the fourth was found by hitting it while fixing the others.
 
