@@ -8,6 +8,31 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
+<Update label="0.38.0" description="2026-09-04">
+  **The record says what actually happened.** Four defects under one invariant: a write must be readable back, and a reported write must have happened. Three were reported from the field within a day of each other; the fourth was found by hitting it while fixing the others.
+
+  ### Added
+
+  - **`set-gate-guard` with no argument READS.** It wrote and confirmed the write, and nothing anywhere read it back — so "is the guard on?" was answerable only by opening `state.json`, which is what a read verb exists to avoid. The reader lives on the **toggle**, deliberately not on `gate-guard`: that verb is the `PreToolUse` hook, which blocks with stderr + exit 2 and **allows by returning silently**, so its stdout is protocol surface and a report printed there would corrupt it. The reporter read that silence as a broken command. Following `owners`, the output states the value **and its limits** — above all that `on` alone does not mean anything is currently blocked.
+  - **`update-epic --withdraw-commit <sha> --withdrawal-reason "<why>"`** — the exit from an append-only array. Append-only was right and stays: order carries meaning and the **last** entry is the endpoint a recorded Gate 2 `headSha` is compared against. But "cannot be reordered" is a different claim from "can never be corrected". A `git reset` is a normal operation and the gate procedure requires attributing at the moment of each commit, so an attribution can outlive its commit through no error of process — after which every escape was worse than the problem: hand-edit `state.json` (forbidden), tag the orphan (makes a false record permanent), or `remove-epic` (destroys the disposition, links and stories). The withdrawal is **recorded** in a sibling `withdrawnCommits` field rather than erased.
+  - **`::` as the explicit separator for `--declined-deferral`,** and placeholders so `--help` teaches the form rather than printing `<a value>`.
+
+  ### Fixed
+
+  - **`--declined-deferral` silently truncated `<what>` at its first colon.** Measured in the wild: `"Set alwaysLoad:false to reclaim RAM:declined because X"` recorded `what: "Set alwaysLoad"` — which reads as an instruction to **do** the thing being declined, the opposite of the record's meaning. Neither split is safe for two free-text halves, so it stops guessing: a single colon behaves as before, `::` is explicit, and an ambiguous value is refused with the remedy in the message. **`--deferral` is deliberately unchanged** — its left half is an epic id, which cannot contain a colon.
+  - **A deferral flag outside an archive printed `updated` and wrote nothing.** It now refuses and names the correction path, which existed and was merely undiscoverable.
+  - **A gate verdict was recordable only on an `openspec`-lane epic** while `set-review-mode` is lane-agnostic and its own table names "a Superpowers task review". Evidence for every other lane became prose that nothing compares, so a verdict could never read **stale**, and `integrity` could not see it. **The archive gate is unchanged and stays openspec-only.**
+  - **The reconcile-gate refusal told you to bypass it in a way that does not work** — that branch is unconditional and `set-gate-guard off` does not reach it.
+  - **A withdrawal could walk an epic past the archive gate** — caught at Gate 2, in this release's own new verb. Withdrawing every sha moved an epic from `stale` to `none-attributed`, and an archive that had been refused succeeded. It now reads `attribution-withdrawn` and is refused by name. A withdrawal corrects the record; it never discharges the obligation.
+  - **`--declined-deferral ":"` recorded `{what:"", reason:""}` and satisfied the archive gate** — an assertion asserting nothing, while the refusal beside it claimed the reason "is not optional". Both halves must now be non-empty.
+
+  ### Notes
+
+  - **No migration.** `withdrawnCommits` is additive and absent until a withdrawal happens; a `state.json` written by 0.37.0 loads unchanged — verified byte-identical through `render`, `verify-state`, `integrity` and `brief` on a 158-epic file.
+  - **The emitted rules block is byte-identical to 0.37.0's** across all three platforms. Managed repos receive no change.
+  - **`integrity` gains reach without gaining checks.** Its staleness and evidence checks read `gateReview` with no lane filter, so they now cover the lanes `record-gate-review` previously refused. Expect true findings on non-openspec epics that carry a verdict and attributed no commits.
+</Update>
+
 <Update label="0.37.0" description="2026-08-31">
   **Help that answers the question actually asked.** `--help` was verb-blind and the emitted rules block carried no route to documentation at all, so an agent that needed a verb's flags read the engine's source — which is exactly what a session bringing another repo up to date did, and said so. Both halves ship together: a local channel that cannot lie about the installed engine, and a pointer to the docs for everything the engine does not know.
 

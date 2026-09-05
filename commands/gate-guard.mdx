@@ -29,11 +29,34 @@ conductor.mjs set-gate-guard on
 conductor.mjs set-gate-guard off
 ```
 
-This flag is reserved for any future generalization of the hook to additional checks beyond the reconcile-owed case. It has **no effect** on the reconcile-owed block described above.
+The flag gates the **tracker-refresh** obligation — an epic whose linked item must be re-read before specs are drawn for it. It has **no effect** on the reconcile-owed block described above, which is unconditional.
 
-## Checking gate guard status
+## Reading it back — `set-gate-guard` with no argument
 
-Run `/pm:gate-guard` at any time to inspect the current state of the hook — whether `gateGuard` is on or off in `state.json`, and whether any epic currently carries `reconcileNeeded: true`. This is the fastest way to understand why a write was blocked without digging into `state.json` directly.
+**New in 0.38.0.** The toggle wrote and confirmed the write, and nothing anywhere read it back — so "is the guard on?" was answerable only by opening `state.json`, which is the thing a read verb exists to avoid.
+
+```bash
+conductor.mjs set-gate-guard
+```
+
+```text
+GATE GUARD — on.
+
+  The reconcile gate is ALWAYS enforced, whatever this flag says: an epic carrying
+  `reconcileNeeded` blocks Edit/Write/NotebookEdit until a verdict is recorded, and
+  `set-gate-guard off` does not reach that case.
+  This flag additionally enforces the TRACKER REFRESH obligation.
+
+  Nothing is blocked right now: no live active epic, and the guard needs one.
+  'on' alone never means something is blocked — the guard also needs a live active
+  epic that owes one of those two things.
+
+  Change it with `set-gate-guard on|off`.
+```
+
+The reader lives on the **toggle**, deliberately not on the `gate-guard` verb. That verb is the hook itself: it blocks by writing to stderr and exiting 2, and it **allows by returning silently** — so its stdout is protocol surface, and a human-readable report printed there would corrupt it. Silence from `gate-guard` is the allow signal, not a broken command.
+
+It states the value **and what it cannot tell you**, because the non-obvious limit is the one a reader gets wrong: `on` alone does not mean anything is currently blocked. The guard also needs a live, non-archived active epic that owes one of the two obligations.
 
 <Warning>
   If you see "blocked by gate guard" on an `Edit` or `Write` call, the only resolution is to run `/pm:resume` and complete the reconcile gate. There is no workaround — `set-gate-guard off` will not help here.
