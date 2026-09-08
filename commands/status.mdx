@@ -106,7 +106,7 @@ Where a record genuinely cannot be reconstructed, `--outcome unreconstructable` 
 
 **New in 0.40.0.** A command that found nothing to change used to print the same success line as one that rewrote the record, so "did that land?" could only be answered by reading `state.json` or `git status`.
 
-Every write now reports through a shared reporter across the **whole** write surface rather than one verb: 26 `saveState` call sites are bound to it, four carry a declared exemption naming its reason, and a per-call-site source scan fails the build on a fifth that does neither. That last part is the point — the same rule shipped at one verb first, and both Gate 2 reviewers independently found four sibling sites still printing success on a no-op save.
+Every write now reports through a shared reporter across the **whole** write surface rather than one verb: 27 `saveState` call sites are bound to it, four carry a declared exemption naming its reason, and a per-call-site source scan fails the build on a fifth that does neither. That last part is the point — the same rule shipped at one verb first, and both Gate 2 reviewers independently found four sibling sites still printing success on a no-op save.
 
 ## Design-document coverage — `verify-specs`
 
