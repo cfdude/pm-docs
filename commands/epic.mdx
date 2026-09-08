@@ -91,25 +91,26 @@ Change any field on an existing epic with `update-epic`. The id is positional.
 conductor.mjs update-epic <id> \
   [--title <title>] [--status <status>] [--priority <P?>] [--lane <lane>] \
   [--plan <path>] [--parent <id>] [--external-id <KEY>] [--external-url <url>] \
-  [--link "<type>:<epic>[:<reason>]"] [--clear-links] \
+  [--link "<type>:<epic>[:<reason>]"] [--clear-links] [--clear <field>] \
   [--description "<why>"] [--notes "<what>"] \
   [--external-updated-at <iso>] [--review-mode off|standard|thorough]
 ```
 
 All validations from `add-epic` apply: no self-parent, no cycles, known status values, and referenced epic ids must exist. On an unknown id or any invalid flag value, the command exits non-zero and writes nothing — including an unrecognized flag name, which used to silently no-op and print a false "updated" success.
 
-**The whole flag surface.** `update-epic` accepts 24 flags, declared once in `EPIC_FLAGS` — the same declaration `add-epic`'s and `add-many`'s surfaces are projected from, so the three cannot drift apart. Beyond the shape above:
+**The whole flag surface.** `update-epic` accepts 30 flags, declared once in `EPIC_FLAGS` — the same declaration `add-epic`'s and `add-many`'s surfaces are projected from, so the three cannot drift apart. Beyond the shape above:
 
 | Flag | Writes | Notes |
 | --- | --- | --- |
 | `--lane` | `lane` | Re-routes an epic in place. |
 | `--plan` | `planPath` | Attaches a plan to an epic created without one. |
-| `--clear-links` | `links` | The named way to empty the array; may not be combined with `--link`. |
+| `--clear-links` | `links` | The named way to empty the array. **Combines with `--link` as of 0.40.0**, so the documented repair is one atomic write. |
 | `--description` | `description` | Durable rationale — why this epic exists. Replaced wholesale on each set. |
 | `--notes` | `notes` | Append-only trail of `{at, actor, text}`. Reads as activity. |
 | `--external-updated-at` | `externalUpdatedAt` | The **tracker's own** timestamp, never a local clock reading. |
 | `--attribute-commit` | `attributedCommits` | **Repeatable**, append-only, in landing order. |
-| `--outcome` | `disposition` | `delivered`, `killed`, `superseded`, or `abandoned`. |
+| `--outcome` | `disposition` | `delivered`, `killed`, `superseded`, `abandoned`, `declined`, or `unreconstructable`. Rendered from `AGENT_OUTCOMES`, so this list cannot drift from what the engine accepts. |
+| `--clear` | any nullable field | **Repeatable** — the uniform unset path. See "Clearing a nullable field" below. |
 | `--reason` | `disposition` | Required for every outcome except `delivered`. |
 | `--carried-to` | `disposition` | Where unfinished work went. |
 | `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`. Splits on the first colon, which is correct here because the left half is an epic id and cannot contain one; a colon in `<section>` is part of the section. |
@@ -185,12 +186,17 @@ The archive verb takes two halves in one invocation, because the gate refuses ei
 
 ```bash
 conductor.mjs update-epic <id> --status archived \
-  --outcome delivered|killed|superseded|abandoned \
+  --outcome delivered|killed|superseded|abandoned|declined|unreconstructable \
   --reason "<why>" \
   --no-deferrals
 ```
 
-`--no-deferrals` is the explicit "there are none" and is a claim, not a default — swap it for `--deferral "<epicId>:<section>"` where work is now held by a registered epic, or `--declined-deferral "<what>:<why not>"` where you are deliberately not doing it. The engine does not read your artifacts and will not guess.
+`--no-deferrals` is the explicit "there are none" and is a claim, not a default — swap it for `--deferral "<epicId>:<section>"` where work is now held by a registered epic, or `--declined-deferral "<what>::<why not>"` where you are deliberately not doing it. The engine does not read your artifacts and will not guess.
+
+Two of those six keywords are easy to confuse and answer different questions:
+
+- **`declined`** — somebody considered this work and decided not to do it. The reason says why not. It has been accepted by the engine since it shipped while reaching **none** of five documented surfaces, including a test that asserted the four-value list and passed by prefix match — so the guard for exactly this drift was blind to it. Repaired in 0.40.0, and every enumeration now renders from `AGENT_OUTCOMES`.
+- **`unreconstructable`** (0.40.0) — somebody looked for the evidence of what happened and it does not exist. Distinct from `unknown`, which the engine stamps and which says nobody looked.
 
 The gate also refuses to archive an `openspec`-lane epic as `delivered` without a passing, **non-stale** Gate 2, and demands `--carried-to <epicId> --reason "<which tasks moved>"` where outstanding work remains. `killed`, `superseded`, and `abandoned` are exempt from both demands by design: the code was never written or was thrown away, and the required reason already answers where the work went.
 
@@ -220,7 +226,46 @@ Three properties, each doing a specific job:
 
 `remove-epic` stays available and ungated for what it is actually for: an epic registered in error, a duplicate, a mistake made a minute ago — where there is no disposition to record because there was no work.
 
-**`--link` replaces the epic's links wholesale** — unlike the other flags, which patch a single field, passing `--link` discards all existing links and stores only the ones you provide in this call. This is the intended path for fixing a malformed link without touching `state.json` directly. Pass every link you want the epic to have; omitting `--link` entirely leaves existing links untouched.
+### `--link` appends (0.40.0)
+
+**`--link` adds to the epic's links rather than replacing them.** Until 0.40.0 it discarded every existing link and stored only the ones supplied in that call — so adding a second link meant re-passing the first, and forgetting to was a silent loss of an edge nothing reported.
+
+A link's **identity is its `type` and `target`**; the reason is not part of it. So re-supplying an identity that is already stored **updates its reason in place** rather than duplicating the edge or silently discarding your correction, and a wholly identical link is left byte-for-byte untouched.
+
+```bash
+# add one edge, keeping everything already there
+conductor.mjs update-epic <id> --link "relates-to:other-epic:shares the migration"
+
+# replace the whole set in ONE atomic write
+conductor.mjs update-epic <id> --clear-links --link "depends-on:blocker:needs its schema first"
+```
+
+**`--clear-links` and `--link` are no longer mutually exclusive.** The documented repair for a malformed link — empty the array, then write the correct set — used to require two invocations, leaving a window in which the epic had no links at all. It is now one write.
+
+### Clearing a nullable field — `--clear <field>` (0.40.0)
+
+Eight fields could be set and never unset. `--clear` is the uniform unset path, and it is **repeatable**:
+
+```bash
+conductor.mjs update-epic <id> --clear parent --clear external-url
+```
+
+| Clearable | Consequence worth knowing before you do it |
+| --- | --- |
+| `parent` · `description` · `review-mode` · `external-updated-at` | None beyond the field going absent. |
+| `external-url` | This is the **dedup key** the inward sync procedure matches on. Clear it and the linked item is mirrored again as a **new** epic on the next sync. |
+| `external-id` | The epic stops being tracker-linked; `record-tracker-refresh` refuses it by name. |
+| `plan` · `spec` | The epic un-claims a source artifact on disk. The next `sync` finds that file orphaned and registers it as a fresh untriaged epic. |
+
+The accepted set is **derived from a `nullable: true` marker on the flag registry**, not typed into the verb — so a nullable field added later with no clearing path fails the suite rather than shipping silently. Rows deliberately _not_ clearable carry a `setOnly: "<reason>"` marker and are refused by name; `links` is one of them, because `--clear-links` already owns that job.
+
+### Registration and last-touched dates (0.40.0)
+
+No flag sets either. Every epic registered from 0.40.0 on carries **`createdAt`**, stamped by `pushEpic()` — the single sink every creation surface routes through, so a new surface inherits the stamp instead of having to remember it. **`touchedAt`** advances inside `saveState()` on any write that genuinely changes the epic's stored content, and on no write that changes nothing.
+
+<Warning>
+  **Absence means UNKNOWN — never today's date, and never another field's value.** An epic registered before 0.40.0 has no registration date. `recover-created-at` (see `/pm:upgrade`) backfills it from the commit that first introduced that id into `.conductor/state.json`, and **leaves it absent** where this checkout holds no such evidence — no git, an untracked state file, a shallow graft, or an id older than the history fetched. The verb is re-runnable precisely so a checkout that later fetches more history recovers what it could not see before.
+</Warning>
 
 **`--review-mode`** can escalate a single epic above the repo's bounded review dial (`off → standard → thorough`), but never de-escalate below it.
 

@@ -55,6 +55,40 @@ One entry, additive, idempotent, and backward-compatible — a `state.json` writ
 
 Three things about PM's emitted output also differ from 0.26.0, deliberately: the "Sync after completing tracker-linked work" reminder now leaves the rules block where no inward procedure is emitted; the briefing's `consider /pm:sync` nudge now leaves outward-only repos; and progress renders `· N lifecycle` where tasks carry the `{/*  pm:lifecycle  */}` marker. Treat a fourth as a regression.
 
+## What 0.40.0's migration does — and the verb that finishes it
+
+0.40.0 gives every epic a **registration date** (`createdAt`) and a **last-touched date** (`touchedAt`). New epics get both for free: `createdAt` is written by `pushEpic()`, the single sink every creation surface routes through, and `touchedAt` advances inside `saveState()` on any write that genuinely changes the epic's stored content.
+
+Epics that already existed are the problem the migration solves — and it cannot solve it alone.
+
+<Warning>
+  **Absence means UNKNOWN. It never means today.** The migration does not stamp upgrade day onto every pre-existing epic. A date that says "registered the day you upgraded" is worse than no date, because a staleness question would then read every legacy epic as brand new.
+</Warning>
+
+**`recover-created-at` is the re-runnable half.** It sweeps every dated-less epic and takes its `createdAt` from the commit that first introduced that id into `.conductor/state.json`, reading local git history only:
+
+```bash
+conductor.mjs recover-created-at
+```
+
+The 0.40.0 upgrade invokes it once for you. You can run it again at any time, and that re-runnability is the design, not a convenience:
+
+- **It is not implemented inside `MIGRATIONS`.** A one-shot transformation that reads disk produces a different result per checkout — which the migration framework forbids by name. Two checkouts of one remote on the development machine differed by two commits touching `state.json`, so a one-shot recovery would have frozen a wrong answer in one of them permanently.
+- **Where this checkout holds no evidence, the date is LEFT ABSENT rather than invented** — no git, an untracked state file, a shallow graft, or an id older than the history you have fetched. Re-run after fetching more history and it recovers what it could not see before.
+- **It never overwrites a date already present**, and it repairs nothing else. An epic sitting in an undefined status is dated like any other and left in that status, because which status it _should_ be is a judgment about what happened to the work.
+
+<Warning>
+  **A shallow clone would have fabricated a date for every epic and recorded it as fact.** At a graft point, git diffs the boundary commit against nothing and reports every id as introduced there — so a shallow checkout would have stamped all of them with the graft date and looked entirely successful. The verb reads git's own `shallow` file and refuses to date across a boundary.
+</Warning>
+
+**Recovering a registration date is not a touch.** The sweep writes `createdAt` without advancing `touchedAt`, because the last-touched stamp answers when the epic's own content last changed, and a backfill of its registration date is not that.
+
+<Note>
+  Measured across 27 distinct upstreams before this shipped: **18 of 20 open epics in PM's own repository carried no date of any kind.** The schema already had `startedAt`, `completedAt`, `externalUpdatedAt` and `disposition.recordedAt` — and nothing recording when an epic was _registered_, which is exactly the population a staleness question is about, since an epic registered and never started has no other date.
+
+  The recovery costs roughly 25ms per epic, so a few seconds on a large repository. `/pm:upgrade` is user-invoked and not hooked, so that cost lands where you can see it.
+</Note>
+
 ## Is OpenSpec current, and is this project current with it?
 
 `pm` and `superpowers` are plugins — they update themselves, and PM already nudges when a repo's stamped version lags the installed one. **OpenSpec is a CLI you upgrade by hand**, and `openspec update` — which regenerates the per-project instruction files, slash commands and skills the whole OpenSpec lane runs on — is a _separate_, manual, per-project step. So a machine can sit on OpenSpec 1.10 while a project still runs 1.6's generated artifacts, indefinitely, with nothing anywhere saying so.
@@ -64,8 +98,14 @@ Measured in PM's own repository: **four minor versions stale**, while actively r
 As of 0.28.0 both `/pm:upgrade` and the `SessionStart` briefing report that drift, from one shared emitter so the two surfaces can never disagree.
 
 <Steps>
-  <Step title="It never runs openspec update for you">
-    PM emits the instruction; you run the terminal command — exactly as with `openspec init`. This is the instruction-layer law, and it is enforced mechanically: a source scan in the test suite fails the build if any engine file ever passes the `openspec` binary an argv other than `--version`.
+  <Step title="PM's engine never runs openspec update — but you or your agent can">
+    **PM's _engine_ never runs it for you: pm instructs, it does not integrate.** That is the instruction-layer law, and it is enforced mechanically — a source scan in the test suite fails the build if any engine file ever passes the `openspec` binary an argv other than `--version`.
+
+    The negation names PM's engine as the non-actor, not a human as the required one. The safety requirement was always **review the diff before committing**, never _a human must type it_.
+
+    <Warning>
+      Until 0.40.0 this read _"you run the terminal command — exactly as with `openspec init`"_. `openspec init` genuinely is reserved to the human in some estates' global agent instructions, so the analogy transferred that reservation onto `update`, which has no such reservation. **Measured cost:** an agent session read the nudge, refused to run the command, and asked its user to run it instead — one full round trip — and the same misread had already left four repositories on one machine stale at 1.9.0. The test that pins the new wording asserts the old wording is **absent** as well, so a revert cannot pass unnoticed.
+    </Warning>
   </Step>
   <Step title="It holds mid-change instead of suppressing itself">
     `openspec update` rewrites the very instruction files an in-flight change is being authored against. So with an active change the drift is still reported, but the imperative becomes **hold until that change is archived**, naming it. Suppressing the nudge outright would silence it permanently in any repo that usually has a change open — which is precisely how the four-version drift above accumulated unseen.
