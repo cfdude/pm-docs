@@ -58,7 +58,7 @@ The engine infers this from nothing else: not the wording, not the commands the 
 
 ## Auditing the record itself — `integrity`
 
-`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A recorded commit sha the repository can no longer resolve — orphaned by a squash-merge and due for deletion at the next `gc`, or already gone. An epic left open in a release that already delivered, and not among the epics that release cut on purpose. An epic something else declares it supersedes, still sitting queued or active. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no Gate 1. An epic archived with an `ungated` Gate 2. An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to.
+`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A recorded commit sha the repository can no longer resolve — orphaned by a squash-merge and due for deletion at the next `gc`, or already gone. An epic left open in a release that already delivered, and not among the epics that release cut on purpose. An epic something else declares it supersedes, still sitting queued or active. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no Gate 1. An epic archived with an `ungated` Gate 2. An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to. An epic in a status the engine does not define.
 
 ```bash
 conductor.mjs integrity
@@ -69,6 +69,44 @@ Every check is reported with its count **including the ones that found nothing**
 <Warning>
   **On the first run after upgrading to 0.27.0, expect a burst of `heal-archived-epic-passed-gate-2`.** Every repo that followed the documented `/opsx:archive` then heal flow lands on `outcome: unknown` rather than `delivered`: the migration only stamps epics already `archived` in state, and the heal flips the rest afterwards. Expected, not a bug — each finding carries the exact remedy.
 </Warning>
+
+### `epic-in-undefined-status` — the record no terminal rule can reach
+
+**New in 0.40.0.** An epic whose `status` is outside the set the engine defines is now a reported finding, mirroring the existing `link-of-unknown-type` check. The finding names the consequence a reader would otherwise have to work out:
+
+- The epic is **exempt from every rule that tests for the archived status** — so it is invisible to precisely the checks that would surface it.
+- Any `depends-on` edge pointing at it **reads unsatisfied forever**, and it permanently absorbs the effective priority of everything waiting on it.
+- The archive walker below cannot reach it either, because it is not `archived`.
+
+It reports; it never repairs. Which status the epic _should_ be in is a judgment about what happened to the work, and the engine will not guess.
+
+<Note>
+  Measured across 27 distinct upstreams before this shipped: **26 epics sitting in `status: "done"`** across five repositories — a value `KNOWN_STATUSES` does not contain, written before the status set was closed, and which 0.27.0's migration never reached because it looked only at epics already reading `archived`.
+</Note>
+
+## Which archived epics did nobody decide about — `unconsidered-outcomes`
+
+**New in 0.40.0.** A read-only list of every archived epic whose disposition is an **engine stamp** carrying `unknown` — that is, the engine recorded that nobody was asked.
+
+```bash
+conductor.mjs unconsidered-outcomes
+```
+
+Each row names **who** stamped it (the 0.27.0 migration and the archive-drift heal are different histories, and which one it was changes how much of the epic's story is still recoverable) and carries the exact `update-epic … --status archived --outcome … --reason … --no-deferrals` invocation that would record a real disposition.
+
+**Both halves of the predicate are load-bearing.** An evidence-derived stamp — a `delivered` written from a passing Gate 2 — is **excluded**, because re-deciding it would ask you to re-derive what the record already got right. So is an agent-recorded outcome of any value, because somebody was asked. A stamp alone or an `unknown` alone would each sweep in the wrong population.
+
+Where a record genuinely cannot be reconstructed, `--outcome unreconstructable` says so with its required reason — distinct from `unknown`, which says nobody looked. The set shrinks only by somebody deciding; the engine never guesses.
+
+<Note>
+  Measured across 27 distinct upstreams: **310 archived epics carrying `outcome: unknown`**, written by 0.27.0's migration with no reason text. In PM's own repository that was **66 of 144** archived epics — 46% of the archive.
+</Note>
+
+## A write that changes nothing says so
+
+**New in 0.40.0.** A command that found nothing to change used to print the same success line as one that rewrote the record, so "did that land?" could only be answered by reading `state.json` or `git status`.
+
+Every write now reports through a shared reporter across the **whole** write surface rather than one verb: 26 `saveState` call sites are bound to it, four carry a declared exemption naming its reason, and a per-call-site source scan fails the build on a fifth that does neither. That last part is the point — the same rule shipped at one verb first, and both Gate 2 reviewers independently found four sibling sites still printing success on a no-op save.
 
 ## Design-document coverage — `verify-specs`
 
