@@ -51,6 +51,26 @@ Three bands rather than two, because _known_ and _does something_ are different 
 
 Links already stored under some other type **still load and still render** — validation is on write only — and `integrity`'s `link-of-unknown-type` check reports each one rather than guessing a repair.
 
+### A value may begin with two dashes (0.41.0)
+
+Until 0.41.0 no flag could take a value starting with `--`, and quoting did not help — the shell strips the quotes and the parser saw a token beginning with `--`.
+
+That landed squarely on the inward tracker-sync line PM's own instructions specify verbatim, `add-epic --id gh-<n> --title "<issue-title>" …`, because **issue titles routinely begin with a flag name** — a bug report _about_ a flag usually is titled that way. And it failed in the worst available shape: the message said "unknown flag(s)" and listed the title, pointing a reader at the flag spelling rather than the value; the sync run continued; and the item was silently absent from the backlog with no trace in the record.
+
+Two forms now work:
+
+```bash
+# a value-position token is the value unless it is shaped exactly like a flag
+conductor.mjs add-epic --id gh-176 --title "--story <n> is 1-indexed but --help says only '<a value>'" ...
+
+# and `=` is the escape for a value that IS shaped exactly like a flag
+conductor.mjs add-epic --id gh-176 "--title=--help" ...
+```
+
+<Warning>
+  **A token shaped exactly like a flag is still a flag, wherever it sits.** `--title --help` leaves `--title` with no value and is refused — correctly, since a value-bearing flag without a value must never write the field quietly absent. What changed in 0.41.0 is that it now exits non-zero and names the token, instead of printing help and exiting **0** having written nothing. Use the `=` form for that case.
+</Warning>
+
 ### A flag with no value is refused
 
 `--clear-links`, `--no-deferrals` and `--done` are the three flags that legitimately carry no value. **Every other flag exits non-zero when its value is missing or blank**, rather than writing the epic with the field quietly absent.
@@ -113,7 +133,7 @@ All validations from `add-epic` apply: no self-parent, no cycles, known status v
 | `--clear` | any nullable field | **Repeatable** — the uniform unset path. See "Clearing a nullable field" below. |
 | `--reason` | `disposition` | Required for every outcome except `delivered`. |
 | `--carried-to` | `disposition` | Where unfinished work went. |
-| `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`. Splits on the first colon, which is correct here because the left half is an epic id and cannot contain one; a colon in `<section>` is part of the section. |
+| `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`, and as of 0.41.0 `"<epicId>::<section>"` is accepted too. Splits on the first colon, which is correct here because the left half is an epic id and cannot contain one; a colon in `<section>` is part of the section. |
 | `--declined-deferral` | `deferralAssertion` | **Repeatable** — `"<what>::<why not>"`. Both halves are free text, so `::` separates them explicitly. A single colon still works where the value carries only one; two or more with no `::` are **refused** rather than guessed, and both halves must be non-empty. |
 | `--no-deferrals` | `deferralAssertion` | The explicit "there are none". |
 | `--withdraw-commit` | `attributedCommits`, `withdrawnCommits` | **Repeatable**. Removes ONE occurrence of a sha this epic attributed, and records why. Refuses a sha the epic never attributed. |
@@ -253,6 +273,7 @@ conductor.mjs update-epic <id> --clear parent --clear external-url
 | Clearable | Consequence worth knowing before you do it |
 | --- | --- |
 | `parent` · `description` · `review-mode` · `external-updated-at` | None beyond the field going absent. |
+| `created-at` **(0.41.0)** | Returns the registration date to **absent**, which means UNKNOWN. The next `recover-created-at` will attempt it again from history — so clear-then-recover is the correction path for a date recovered wrongly. |
 | `external-url` | This is the **dedup key** the inward sync procedure matches on. Clear it and the linked item is mirrored again as a **new** epic on the next sync. |
 | `external-id` | The epic stops being tracker-linked; `record-tracker-refresh` refuses it by name. |
 | `plan` · `spec` | The epic un-claims a source artifact on disk. The next `sync` finds that file orphaned and registers it as a fresh untriaged epic. |
@@ -266,6 +287,15 @@ No flag sets either. Every epic registered from 0.40.0 on carries **`createdAt`*
 <Warning>
   **Absence means UNKNOWN — never today's date, and never another field's value.** An epic registered before 0.40.0 has no registration date. `recover-created-at` (see `/pm:upgrade`) backfills it from the commit that first introduced that id into `.conductor/state.json`, and **leaves it absent** where this checkout holds no such evidence — no git, an untracked state file, a shallow graft, or an id older than the history fetched. The verb is re-runnable precisely so a checkout that later fetches more history recovers what it could not see before.
 </Warning>
+
+**As of 0.41.0 a recovered date can be corrected.** The recovery deliberately never overwrites a date already present — so a re-run after fetching more history cannot clobber a good answer — and until 0.41.0 nothing removed one either. Together that made a _wrong_ date permanent, correctable only by the hand-edit this tool forbids everywhere else. And it can be wrong: a reused id dates to the first registration, and a wholesale `state.json` rewrite or a history rewrite dates every epic to that event.
+
+```bash
+conductor.mjs update-epic <id> --clear created-at
+conductor.mjs recover-created-at          # attempts it again from history
+```
+
+`touchedAt` is deliberately **not** clearable, and its registry row says why: the engine re-stamps it on the next write that changes the record, so clearing it would be undone immediately and answers no question.
 
 **`--review-mode`** can escalate a single epic above the repo's bounded review dial (`off → standard → thorough`), but never de-escalate below it.
 
@@ -325,6 +355,19 @@ All of `--preauthorize`, `--context`, and `--notify` are **additive** — re-run
 conductor.mjs record-gate-review <id> --gate 1|2 --verdict pass|fail \
   --base-sha "<a>" --head-sha "<b>" --reviewer "<identity>"
 ```
+
+<Note>
+  **Gate 1 records artifact paths, not a commit range (0.41.0).** A passing verdict used to require `--base-sha`/`--head-sha` on _either_ gate — but Gate 1 reviews spec artifacts **by path, before code exists**, so the only way to satisfy it was a range of artifact commits, which every downstream consumer then reads as an implementation range.
+
+  ```bash
+  conductor.mjs record-gate-review <id> --gate 1 --verdict pass \
+    --artifact openspec/changes/<id>/proposal.md \
+    --artifact openspec/changes/<id>/specs/<capability>/spec.md \
+    --reviewer "<identity>"
+  ```
+
+  `--artifact` repeats. A **gate-2** pass still requires the sha pair, unchanged. Making the shas merely optional for Gate 1 was considered and rejected: a correct Gate 1 would then render `⚠ no checkable evidence`, which moves the wrong record one step along rather than repairing it. Paths are recorded bare, with no digest — nothing compares a Gate 1 digest today, and a digest with no comparator looks like staleness detection without being it.
+</Note>
 
 `--base-sha`/`--head-sha` record the commit range the review actually covered, and `--reviewer` records who performed it — **as fields, not as prose in a note.** A review of `a..b` on an epic that later shipped `b..c` used to be byte-identical in `state.json` to one that covered everything; recorded as fields, the range is what later tells a covering verdict from a **stale** one.
 
