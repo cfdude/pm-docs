@@ -171,13 +171,35 @@ A release is a named grouping of epics the agent declares: an id, intent prose, 
 ```bash
 conductor.mjs release 0.27.0 --intent "<what this release is for>" --target <t>
 conductor.mjs release 0.27.0 --member <epicId>
-conductor.mjs release 0.27.0 --defer <epicId> --reason "<why it was cut>"
+conductor.mjs release 0.27.0 --defer "<epicId>:<why it was cut>"
+conductor.mjs release 0.27.0 --unmember "<epicId>:<why>"
+conductor.mjs release 0.27.0 --undefer "<epicId>:<why it is back in scope>"
+conductor.mjs release show 0.27.0
 ```
 
 - **Intent prose is required to create one** — an id with no statement of what it is for is unreadable later, which is the failure this records against.
 - **Membership is one-way.** It lives on the epic as `epic.release`, at most one, and the release object carries no member list to fall out of step with it.
 - **The engine proposes nothing.** No epic is auto-assigned; adding, re-prioritizing, or archiving epics changes membership for none of them. Grouping is a scope judgment, and the scope judgment is the thing being preserved.
 - **An exclusion is not an ending.** A deferred epic keeps its status and gets no disposition of its own — it stays in the backlog because it is still work someone may do. What it loses is membership of that release.
+
+### Reading one back, and taking it back — `release show`, `--unmember`, `--undefer`
+
+**New in 0.41.0.** A release could be written and never read. `release show [<id>]` renders intent, target, **derived** members, deferrals and the cross-spec verdict; with no id it lists every release.
+
+That read-back matters more than it sounds, because of the storage asymmetry above: membership lives on the epic and is derived, while `deferred[]` lives on the release object. So a reader who opened that object saw exclusions populated and members absent — reading as _"this release has cuts and no content"_, the exact inverse of the truth.
+
+`--member` and `--defer` also shipped with **no inverse**, which is the defect class 0.40.0's own call-site rule exists to catch, found by turning that rule on a surface older than it:
+
+```bash
+conductor.mjs release <id> --unmember "<epicId>:<why>"
+conductor.mjs release <id> --undefer  "<epicId>:<why it is back in scope>"
+```
+
+Each requires a reason, and those reasons **land in the record** — a new `amendments[]` on the release object, which `release show` renders. `--member`'s long-standing _implicit_ undefer (adding a cut epic back silently cleared its exclusion) now records the same way instead of happening invisibly.
+
+<Note>
+  `amendments[].epic` holds another record's id, so it joins the reference sweep `remove-epic` runs. Without that, removing an epic would have left a dangling pointer that `release show` faithfully rendered — found by applying the **data-reference** half of the call-site rule, which asks where a field holding an id is written, read, **and removed**.
+</Note>
 
 ## When to run it
 

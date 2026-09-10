@@ -21,6 +21,7 @@ The only dedup that existed was **identity-based** — same id, or same `externa
 
 ```bash
 conductor.mjs triage "<the ask, in its own words>"
+conductor.mjs triage "--story <n> is 1-indexed but --help says only '<a value>'"   # 0.41.0: an ask may begin with --
 ```
 
 `--limit N` (default 5) bounds how many candidates come back. It must be a positive integer — a valueless or non-numeric `--limit` is **refused rather than coerced**, and any other flag is rejected by name. A wrong bound on a recall device silently hides the twin the whole command exists to surface.
