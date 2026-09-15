@@ -22,7 +22,7 @@ It answers questions that were previously archaeology:
 | How long between an epic being queued and picked up? | read the git log and guess |
 | How often is work detoured, and off which epics? | count rows in a log by hand |
 | How is work distributed across lanes, and what got re-routed? | not answerable |
-| In what order did gate verdicts actually land? | reconstruct from timestamps |
+| In what order did gate verdicts actually land — or get withdrawn (`gate-withdrawn`, 0.43.0)? | reconstruct from timestamps |
 | **Were there writes the conductor did not make?** | **a `jq` sweep across every repo** |
 
 That last row is the one that earns its cost. A **hand-edit** of the state file shows up as a revision no recorded event accounts for — the failure mode this project has repeatedly found and repeatedly had to dig for.
