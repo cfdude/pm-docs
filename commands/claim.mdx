@@ -26,6 +26,8 @@ An advisory marker nobody honours is worse than none, because it _looks_ like co
   **The override is `--steal`, and the name is load-bearing.** The state writer reads `--force` globally off the argument list to bypass its revision guard, so spelling this override that way would have silently disabled optimistic concurrency as a side effect of a cooperative feature. `claim --steal` still exits with the conflict code if the state moved underneath it.
 </Note>
 
+**The epic id is the one positional, and it may come after the flags (0.44.0).** `--steal` and `--repo` take no value, so `claim --steal e1 --session s2` claims `e1`. `--id e1` in its place is diagnosed with the line you meant. A token that only looks like a flag is refused rather than skipped — `claim --repo --session s --Steal` used to record the repo claim, and now prints `conductor: unknown flag --Steal for claim — it accepts: --session, --ttl, --steal, --repo, --force`. `--force` belongs to the state write, not to the claim, and does not override a live claim — that is `--steal`.
+
 ## What expires a claim
 
 A **stated TTL**, carried on the record — not a heartbeat.
@@ -36,10 +38,32 @@ Defaults are 120 minutes for an epic and **30 for the repository marker** — sh
 
 The TTL is **read**, never swept. Nothing rewrites state to expire a claim, which is what lets `owners` and `integrity` agree without either of them writing.
 
+**`--ttl` is bounded: at most 10080 minutes (7 days)** (0.44.0), on `claim` and `claim --repo` alike. A larger value, zero, a negative or a non-number is refused with exit 1 and nothing is written — not the epic's claim in `state.json`, not `.conductor/session-claim.json`:
+
+```text
+$ conductor.mjs claim e1 --session s1 --ttl 1e12
+conductor: --ttl requires a positive number of minutes, at most 10080 (7 days). Nothing was written.
+```
+
+A claim is "who owns this right now", renewed by re-claiming, so a week is generous. Before the bound, `claim --ttl 1e12` wrote the claim and then crashed with `RangeError: Invalid time value`, and from then on `owners`, `integrity` and every other session's `claim` crashed the same way.
+
+**A stored claim whose expiry cannot be read is EXPIRED — never live, never a crash.** That covers a `ttlMinutes` above the bound (including one an earlier engine wrote before the bound existed), a `claimedAt` that does not parse, and a sum that is not a representable date. The writer and the reader judge a TTL with the same predicate, so nothing `claim` writes can be a claim no reader can read. One consequence after upgrading: a claim taken with a TTL over 7 days reads as expired, so re-claim it if the session is still working.
+
 ## What reports a stale one
 
 - **`owners`** when you ask — and `owners --json` answers `quiescent: true` when nothing is claimed, which is the "is anyone working in this repo" question.
 - **`integrity`** when nobody thinks to ask. That is the case that matters: a stale claim is left by a session that is no longer there to ask.
+
+A claim whose expiry cannot be read is reported `STALE` and `expired at an unreadable time`, and can be taken over without `--steal`. With `ttlMinutes: 1000000000000` stored on `e1`:
+
+```text
+1 epic claim(s):
+  • `e1` — STALE by 's1' since 2026-09-15T21:59:55.881Z, expired at an unreadable time
+```
+
+`integrity` reports the same claim as `expired at an unreadable time (claimed …, ttl 1000000000000 min)`, and `claim e1 --session s2` answers `took over 'e1' from session 's1' (its claim had expired)`.
+
+The repo marker is written by temp file plus rename in `.conductor/`, so a reader racing a write sees the whole old marker or the whole new one — never a torn file read as "no claim". It is not locked: the marker is advisory and never guarded a read-modify-write.
 
 Archiving an epic **clears** its claim rather than refusing the archive — refusing would be the conductor declining to finish work over an advisory note.
 

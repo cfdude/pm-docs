@@ -61,6 +61,24 @@ Until you triage them, any epics discovered during the scan sit in the `untriage
 
 If `.conductor/state.json` already exists, init is a complete no-op — you can re-run it safely. If you genuinely need to reset your project's PM state, delete `.conductor/state.json` and run `/pm:init` again, though this is rarely the right move. For version migrations after installing a new PM release, use `/pm:upgrade` instead — it preserves your epic history and runs the correct migration scripts.
 
+## What init refuses (0.44.0)
+
+`init` takes no positional arguments and one flag of its own, `--platform <claude-code|hermes|codex>` (see `/pm:upgrade`), plus the `--force` every mutating verb accepts. A valueless or unknown `--platform`, or any other flag, is refused before anything is created, so a failed `init` leaves no `.conductor/` behind to end pm's dormancy: `conductor: --platform must be one of claude-code|hermes|codex`. It used to create `.conductor/state.json` first and then exit 1. `init --help` prints its flags and creates nothing.
+
+**`init` refuses, with exit 11 and nothing written, in two more cases** — both mean a file it depends on is in a state the engine will not guess about, and a human fixes the file:
+
+- **`.conductor/state.json` exists but cannot be read** (conflict markers, truncation, the wrong shape). `init` loads it before its first write, so it never writes over, beside or around it — not even `.gitignore`. The refusal names the reason and the remedies (see `/pm:gate-guard` for the full message). For a file git has never had, move it aside and re-run: `mv .conductor/state.json .conductor/state.json.damaged`, then `/pm:init`.
+- **The rules file's managed-block markers are ambiguous.** A BEGIN marker line with no END, an END with no BEGIN, or two blocks. Markers are whole lines — a marker string quoted in prose or inline code is ordinary text. The check runs before anything is created, so a fresh repo gets no `.conductor/`:
+  ```text
+  conductor: refused to write the pm rules block into CLAUDE.md — its marker lines are not exactly one BEGIN line followed by one END line, so which text is managed cannot be known:
+    line 3: BEGIN
+    Delete the stray marker line(s) from the shell, highest line number first, e.g.:
+      sed -i.bak '<N>d' CLAUDE.md
+    (a whole managed block is safe to delete; hand-written text between markers is yours to keep).
+    Nothing was written. After fixing the markers, re-run the command.
+  ```
+  Delete the stray lines by hand, then run `init` again.
+
 ## Example output after init
 
 ```text

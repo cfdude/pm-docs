@@ -40,7 +40,7 @@ A typo'd type used to be stored silently and then read as precedent by the next 
 | --- | --- |
 | `depends-on` | **Read by the engine** — orders the queue so a blocker is listed, and picked by `/pm:next`, ahead of the epic waiting on it. |
 | `supersedes` | **Read by the engine** — marks the named epic replaced, for `/pm:triage` and for `integrity`. Lives on the epic that _replaces_. |
-| `may-invalidate` | Protocol state written at a detour PUSH; carries the reconcile verdict. Nothing switches on the type. |
+| `may-invalidate` | Protocol state written at a detour PUSH, carrying the arming record `reconcileOnResume` (true only from `push-detour --reconcile`; a link you supply with `--link` is written `false`). `record-reconcile` hangs the reconcile verdict on an ARMED link and never creates one (0.44.0). Nothing switches on the type. |
 | `relates-to` · `blocks` · `resolves-blocker-for` | Annotation only — recorded for a reader, read by no behaviour. |
 
 Three bands rather than two, because _known_ and _does something_ are different claims.
@@ -77,6 +77,16 @@ conductor.mjs add-epic --id gh-176 "--title=--help" ...
 
 The rule lives on the shared flag registry rather than in each command, so `add-epic`, `update-epic`, `add-many`, `record-gate-review`, `record-cross-spec-review` and `release` cannot answer it differently — which is exactly what they used to do: `add-epic --plan` with no value exited 0 and created the epic with no plan attached, while `update-epic --plan` refused the identical mistake a minute later.
 
+## The command line — help, quoting, `--force` (0.44.0)
+
+Every engine verb on this page is held to one pre-dispatch check, which runs before anything is written:
+
+- **`--help` or `-h` anywhere after the verb prints that verb's help, exits 0 and writes nothing** — `remove-epic e2 --help` removes nothing. In a flag's value position it is refused instead, because there it is data: `conductor: --title requires a value — '--help' arrived where that value belonged and was read as a flag, not as the value. If it IS the value, write --title=--help`
+- **An undeclared flag is refused by name**, with the flags the verb does accept.
+- **Quote every multi-word value.** A token no flag consumed is a positional, and one beyond what the verb reads is refused before anything is written: `conductor: add-epic takes no positional arguments — 'Title' is an extra argument it does not read. Nothing was written.` followed by `If 'Title' belongs to --title's value, quote the whole value.`
+- **An epic id is positional wherever a verb takes one.** `remove-epic --id e2`, `set-active --id e2` and the rest are diagnosed with the line you meant, not only on `update-epic`.
+- **`--force` is accepted on every mutating verb here** — `add-epic`, `add-many`, `update-epic`, `reorder`, `remove-epic`, `set-active`, `clear-active`, `set-autonomy` and `record-gate-review` — and refused on read-only verbs. It belongs to the guarded write of `.conductor/state.json`, not to any verb's parser, so it may stand anywhere on the line and is never read as an id. `add-epic`, `update-epic` and `claim` used to refuse it outright. `node "$ENGINE" <verb> --help` lists it under "Accepted on every mutating verb".
+
 ## Bulk create with add-many
 
 To register a parent epic and its children in one atomic operation — for example, a sprint and its child tickets — author a JSON batch file and pass it with `--from`:
@@ -103,6 +113,8 @@ conductor.mjs add-many --from /path/to/batch.json
 
 When a `parent` key is present, it is created first and each entry in `epics[]` defaults its `parent` field to it. The operation is **atomic**: every entry is validated up front — id format, uniqueness against existing epics and within the batch itself, lane, status, and parent refs/cycles. On any failure, nothing is written and the command exits non-zero naming the offender. A valid batch is persisted in a single write, so there is no partial-state race. Pass `--from -` to read the batch from stdin. The `parent` key is optional; a bare `{ "epics": [...] }` batch also works.
 
+**A batch key is not a command-line flag.** `add-many --from b.json --external-id X` is refused before the batch is read (`unknown flag --external-id for add-many — it accepts: --from, --force`); it used to create the batch and drop the flag.
+
 ## Updating an epic
 
 Change any field on an existing epic with `update-epic`. The id is positional.
@@ -116,7 +128,7 @@ conductor.mjs update-epic <id> \
   [--external-updated-at <iso>] [--review-mode off|standard|thorough]
 ```
 
-All validations from `add-epic` apply: no self-parent, no cycles, known status values, and referenced epic ids must exist. On an unknown id or any invalid flag value, the command exits non-zero and writes nothing — including an unrecognized flag name, which used to silently no-op and print a false "updated" success.
+All validations from `add-epic` apply: no self-parent, no cycles, known status values, and referenced epic ids must exist. On an unknown id or any invalid flag value, the command exits non-zero and writes nothing — including an unrecognized flag name, which used to silently no-op and print a false "updated" success, and an unquoted multi-word value: `update-epic e1 --title My Title` stored `My` and now refuses `'Title'` as an extra argument, with a hint to quote the whole value. Both refusals happen before dispatch and apply to every verb on this page — see "The command line" above.
 
 **The whole flag surface.** `update-epic` accepts 31 flags, declared once in `EPIC_FLAGS` — the same declaration `add-epic`'s and `add-many`'s surfaces are projected from, so the three cannot drift apart. Beyond the shape above:
 
@@ -124,11 +136,11 @@ All validations from `add-epic` apply: no self-parent, no cycles, known status v
 | --- | --- | --- |
 | `--lane` | `lane` | Re-routes an epic in place. |
 | `--plan` | `planPath` | Attaches a plan to an epic created without one. |
-| `--clear-links` | `links` | The named way to empty the array. **Combines with `--link` as of 0.40.0**, so the documented repair is one atomic write. |
+| `--clear-links` | `links` | The named way to empty the array. **Combines with `--link` as of 0.40.0**, so the documented repair is one atomic write. **Refused** (0.44.0) on an epic that owes a reconcile and holds an armed (or pre-0.44.0) `may-invalidate` link — the clear-and-re-supply repair included — until `record-reconcile` answers it. |
 | `--description` | `description` | Durable rationale — why this epic exists. Replaced wholesale on each set. |
 | `--notes` | `notes` | Append-only trail of `{at, actor, text}`. Reads as activity. |
 | `--external-updated-at` | `externalUpdatedAt` | The **tracker's own** timestamp, never a local clock reading. |
-| `--attribute-commit` | `attributedCommits` | **Repeatable**, append-only, in landing order. |
+| `--attribute-commit` | `attributedCommits` | **Repeatable**, append-only, in landing order. Resolved at write time and stored as the FULL object name (`HEAD`, a short sha or an annotated tag records the commit it names now); a value that is not a commit in this clone refuses the whole invocation (0.44.0). |
 | `--outcome` | `disposition` | `delivered`, `killed`, `superseded`, `abandoned`, `declined`, or `unreconstructable`. Rendered from `AGENT_OUTCOMES`, so this list cannot drift from what the engine accepts. |
 | `--clear` | any nullable field | **Repeatable** — the uniform unset path. See "Clearing a nullable field" below. |
 | `--reason` | `disposition` | Required for every outcome except `delivered`. |
@@ -136,7 +148,7 @@ All validations from `add-epic` apply: no self-parent, no cycles, known status v
 | `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`, and as of 0.41.0 `"<epicId>::<section>"` is accepted too. Splits on the first colon, which is correct here because the left half is an epic id and cannot contain one; a colon in `<section>` is part of the section. |
 | `--declined-deferral` | `deferralAssertion` | **Repeatable** — `"<what>::<why not>"`. Both halves are free text, so `::` separates them explicitly. A single colon still works where the value carries only one; two or more with no `::` are **refused** rather than guessed, and both halves must be non-empty. |
 | `--no-deferrals` | `deferralAssertion` | The explicit "there are none". |
-| `--withdraw-commit` | `attributedCommits`, `withdrawnCommits` | **Repeatable**. Removes ONE occurrence of a sha this epic attributed, and records why. Refuses a sha the epic never attributed. |
+| `--withdraw-commit` | `attributedCommits`, `withdrawnCommits` | **Repeatable**. Removes ONE occurrence (the last) of a commit this epic attributed, and records why. Matched by commit IDENTITY where the value resolves — a full sha withdraws a legacy short entry of the same commit — and by exact spelling otherwise, so a legacy value that no longer resolves stays withdrawable. The withdrawal records the stored entry removed. Refuses a sha the epic never attributed. |
 | `--withdrawal-reason` | `withdrawnCommits`, `withdrawnGateReviews` | Required by `--withdraw-commit` and by `--withdraw-gate-review`, and refused on its own; deliberately **not** `--reason` — that one is the disposition's. |
 | `--withdraw-gate-review` | `gateReview`, `withdrawnGateReviews` | **Repeatable** (0.43.0) — distinct gates are withdrawn together under the one reason. Withdraws a recorded gate verdict that does not belong on this epic, and records why with `--withdrawal-reason`. The WHOLE entry moves, `superseded` included, into `withdrawnGateReviews` — recorded, never erased. |
 
@@ -158,15 +170,25 @@ The engine infers attribution from **nothing** — not the files a commit touche
 conductor.mjs update-epic <id> --withdraw-commit <sha> --withdrawal-reason "<why>"
 ```
 
-Append-only is right and stays: order carries meaning, and the last entry is the endpoint a recorded Gate 2 `headSha` is compared against. But _cannot be reordered_ is a different claim from _can never be corrected_. A `git reset` is an ordinary operation, and attributing at the moment of each commit means an attribution can outlive its commit through no error of process — after which `integrity` reports a sha the repository cannot resolve, forever.
+Append-only is right and stays: order carries meaning. But _cannot be reordered_ is a different claim from _can never be corrected_. A `git reset` is an ordinary operation, and attributing at the moment of each commit means an attribution can outlive its commit through no error of process — after which `integrity` reports a sha the repository cannot resolve, forever.
 
-The withdrawal is **recorded**, not erased: `withdrawnCommits` keeps `{sha, reason, withdrawnAt}` beside the array rather than inside it, which is what keeps the endpoint rule intact. It removes **one** occurrence per request, because the array does not de-duplicate and removing every copy would move that endpoint as a side effect.
+The withdrawal is **recorded**, not erased: `withdrawnCommits` keeps `{sha, reason, withdrawnAt}` beside the array rather than inside it, where `sha` is the stored entry removed. It removes **one** occurrence per request, because the array does not de-duplicate. As of 0.44.0 a value that resolves matches by commit identity — a full sha withdraws a legacy short entry of the same commit — and one that does not still withdraws an entry spelled exactly so, because the records that most need withdrawing are the legacy ones that no longer resolve.
 
 <Warning>
   **Withdrawing every attribution does not clear a Gate 2 obligation.** An epic that attributed, then withdrew, and now attributes nothing reads `attribution-withdrawn` — not `none-attributed` — and the archive gate refuses it by name. A withdrawal says a sha was _wrong_; it never says the work was never done.
 </Warning>
 
-Catch up on work already in flight **only before the first attribution**, in landing order; after that, attribute forward only. The array is append-only, and its **last** entry is what a recorded Gate 2 `headSha` is compared against — so a late-inserted ancestor reads as a stale verdict and refuses the archive.
+Catch up on work already in flight in landing order, then attribute forward. The array is append-only, and **every attributed commit must be reached by** a recorded Gate 2 `headSha` — equal to that head or an ancestor of it — whatever its position; one the head does not reach reads as a stale verdict and refuses the archive. Through 0.43.0 only the LAST entry was compared, so an ancestor attributed after an uncovered descendant read fresh.
+
+### Every commit value is resolved when it is written (0.44.0)
+
+`--attribute-commit`, `--withdraw-commit` and `record-gate-review`'s two range bounds (below) resolve the typed value against this clone's object database and store the full object name — so `HEAD`, a short sha or an annotated tag records the commit it names at that moment. A value that does not resolve to exactly one commit refuses the invocation and names every such value:
+
+```text
+conductor: --attribute-commit value "not-a-commit" does not resolve to exactly one commit in this repository's object database — not a commit, ambiguous, or absent from this clone. A recorded commit is resolved when it is written and stored as its full object name, so a value nobody can check is never recorded. Nothing was written.
+```
+
+`--withdraw-commit` is the exception that does not refuse: it resolves only to match by identity, and falls back to exact spelling. Stored values are never rewritten by a migration.
 
 <Warning>
   **Never attribute the commit that moves `openspec/changes/<id>/` under `archive/`**, or any commit that only relocates or deletes a change's artifacts. That move lands after the reviewed range by construction, so attributing it makes the epic's own Gate 2 stale at the instant the archive gate reads it.
@@ -213,6 +235,15 @@ conductor.mjs update-epic <id> --status archived \
 ```
 
 `--no-deferrals` is the explicit "there are none" and is a claim, not a default — swap it for `--deferral "<epicId>:<section>"` where work is now held by a registered epic, or `--declined-deferral "<what>::<why not>"` where you are deliberately not doing it. The engine does not read your artifacts and will not guess.
+
+**The disposition flags are recorded only inside an archive (0.44.0).** `--outcome`, `--reason` and `--carried-to` supplied without `--status archived` were dropped while the command reported that every supplied value was already held — false, and the epic carried no disposition. They now share the deferral flags' refusal, before anything is loaded or written; `--correct-disposition` keeps its own. Real output, on an unarchived epic:
+
+```text
+$ update-epic e1 --outcome killed --reason no
+conductor: --outcome, --reason are recorded only when an epic is ARCHIVED, and this invocation does not archive 'e1' — nothing would have been written.
+  To record one: add --status archived --outcome <outcome> --reason "<why>".
+  To CORRECT one already recorded: re-run the archive with --correct-disposition "<why the recorded one was wrong>" alongside the corrected flags.
+```
 
 Two of those six keywords are easy to confuse and answer different questions:
 
@@ -351,6 +382,8 @@ conductor.mjs remove-epic <id> [--cascade]
 
 - **Blocked by default** if the epic has any descendants. The command prints a `(id, title, lane, priority, status)` table of the parent and every descendant at any depth, then exits non-zero. Reassign or remove the descendants first, or use `--cascade`.
 - **`--cascade`** removes the epic and all its descendants together in one atomic write. The preview table from the blocked attempt and the `--cascade` blast radius always agree — confirming from that table is confirming the real deletion set.
+- **`--cascade` takes no value, in either spelling (0.44.0).** `remove-epic p --cascade true` used to be accepted; now `true` is an extra argument (`conductor: remove-epic takes <id> — 'true' is an extra argument it does not read. Nothing was written.` then `--cascade takes no value.`), and `--cascade=true` is refused naming `--cascade`. Write `--cascade` on its own.
+- **A detour a paused epic still owes a reconcile against cannot be removed (0.44.0)** — removing it would strip the link the verdict must name. Answer it with `record-reconcile` first; see `/pm:resume`.
 - **Dangling links are cleaned up automatically.** Any other epic's `links[]` entries that reference the removed id are stripped, and the command reports which epics were affected.
 - If the removed epic was the active epic, the `.active` pointer is cleared automatically.
 - **A removal now survives the next sync** (0.31.0). Removing an epic that claimed a plan writes a **tombstone** recording that the artifact must not be re-registered — otherwise the next `/pm:sync` would find the orphaned plan on disk and register it right back. Attaching that plan to an epic (`update-epic <id> --plan <path>`) clears the tombstone.
@@ -369,6 +402,14 @@ conductor.mjs clear-active      # clears the active pointer
 ```
 
 `set-active` sets `.active = <id>` and the epic's `status: "active"` together, demoting any previously-active epic to `queued` — so the pointer and status can never disagree. It rejects an unknown or archived id. `update-epic <id> --status active` keeps them in sync too, and moving the active epic off `active` clears the pointer automatically.
+
+**Moving the pointer off an epic that owes a reconcile warns and keeps the obligation (0.44.0).** Every verb that moves `.active` — `set-active`, `clear-active`, `update-epic`, `add-epic`/`add-many` creating an active epic, and `pop-detour` (off the detour) — prints this after its save; `push-detour` parking the epic is the one exemption. The guard blocks again as soon as the epic is active:
+
+```text
+conductor: 'p' is no longer the active epic and still owes a reconcile against 'd' — the obligation is kept, and gate-guard blocks edits again when it is active. Answer it with `record-reconcile p --detour <detourId> --verdict valid|invalidated`.
+```
+
+Through 0.43.0, `clear-active` or `set-active <other>` silently erased the obligation.
 
 ## Granting autonomy
 
@@ -412,6 +453,22 @@ conductor.mjs record-gate-review <id> --gate 1|2 --verdict pass|fail \
 </Note>
 
 `--base-sha`/`--head-sha` record the commit range the review actually covered, and `--reviewer` records who performed it — **as fields, not as prose in a note.** A review of `a..b` on an epic that later shipped `b..c` used to be byte-identical in `state.json` to one that covered everything; recorded as fields, the range is what later tells a covering verdict from a **stale** one.
+
+**Both bounds are resolved when recorded (0.44.0).** `--head-sha HEAD` stores the commit HEAD was at that moment, in full. A bound that is not a commit in THIS clone refuses the whole invocation — `root`, or a sha from a clone that does not hold the reviewed range:
+
+```text
+conductor: --base-sha/--head-sha values "1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222" do not resolve to exactly one commit in this repository's object database — not a commit, ambiguous, or absent from this clone. A recorded commit is resolved when it is written and stored as its full object name, so a value nobody can check is never recorded. Nothing was written.
+```
+
+So a clone that does not hold the reviewed commits cannot record a range over them — after a squash-merge that is any clone without the `presquash/*` tags (one cloned without tags, or with a single branch only, for instance). Record Gate 2 from the authoring clone before the squash-merge, or fetch the `presquash/*` tags first.
+
+**Fresh means the head reaches EVERY attributed commit.** A verdict reads `⚠ stale` on every surface, and refuses a `delivered` archive, when any attributed commit is not equal to or an ancestor of `headSha` — including a head on an unrelated branch, which reaches none:
+
+```text
+conductor: cannot archive openspec-lane epic 'e' — its passing Gate 2 reviewed up to 87886d787d1182cec964bdddfdb21aeb58d32e13, which does not reach the commit(s) attributed to this epic: 1b27861d8a50e310ff9f8f0e82574c9d187dd4f9. Re-review the full range and record it, or correct the attribution.
+```
+
+A legacy value stored before write-time resolution that is not a hexadecimal commit name (`HEAD`, `not-a-commit`) is never resolved at read time and always reads stale; `integrity`'s `recorded-sha-the-repository-cannot-resolve` check names it. A hexadecimal value this clone does not hold reads `unverifiable`, as before.
 
 Verdicts recorded before these fields existed carry a free-text `note` instead. They load unchanged and are reported as carrying no checkable evidence — never deleted, never rewritten, never mined for a range by parsing that note.
 
