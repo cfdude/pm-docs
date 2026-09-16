@@ -16,7 +16,7 @@ Resuming blindly means building on a stale plan. If the detour was substantial e
 
 <Steps>
   <Step title="Resume triggers the gate">
-    `/pm:resume` pops the top detour stack frame and checks whether `reconcileOnResume` was `true`. If yes, `reconcileNeeded: true` is set on the paused epic and the gate fires before any code can be written.
+    `/pm:resume` pops the top detour stack frame and checks whether `reconcileOnResume` was `true`. If yes, `reconcileNeeded: true` is set on the paused epic and the gate fires before any code can be written. As of 0.44.0 the obligation is also recorded per detour on the paused epic's `may-invalidate` link (`reconcileOnResume: true`, written only by `push-detour --reconcile`), so `pop-detour` prints `RECONCILE GATE` naming EVERY detour still owed — including an earlier `--reconcile` detour a later `--no-reconcile` push did not cancel.
   </Step>
   <Step title="A fresh-context review is dispatched">
     A clean-context review is delegated via the Task tool with the paused epic id and the detour epic id. It runs with no prior conversation history — this is intentional, preventing any in-session assumptions from contaminating the review.
@@ -29,12 +29,14 @@ Resuming blindly means building on a stale plan. If the detour was substantial e
   <Step title="The verdict is written back durably">
     The verdict is recorded via:
     ```bash
+    # AMENDMENTS: none
     node "$ENGINE" record-reconcile <paused-id> \
-      --detour <detour-id> \
-      --verdict <valid|invalidated> \
-      --amendments "<amendment-a>;<amendment-b>;..."
+      --detour <detour-id> --verdict <valid|invalidated> --amendments none
+    # otherwise: one --amendment per AMENDMENTS line, verbatim
+    node "$ENGINE" record-reconcile <paused-id> \
+      --detour <detour-id> --verdict invalidated --amendment "<line 1>" --amendment "<line 2>"
     ```
-    This attaches `{verdict, amendments, reconciledAt}` to the paused epic's `may-invalidate` link to the detour in `.conductor/state.json` (creating the link if it doesn't already exist), and clears `reconcileNeeded` in one step. The judgment survives past this conversation instead of only ever living in the transcript.
+    This attaches `{verdict, amendments, reconciledAt}` to the paused epic's `may-invalidate` link to the detour in `.conductor/state.json`. The judgment survives past this conversation instead of only ever living in the transcript. As of 0.44.0 the verb **never creates a link**: the verdict is refused, with nothing written and the owed detours named, against the paused epic itself, an unrelated epic, a `--no-reconcile` detour, or a detour whose frame is still on the stack. `reconcileNeeded` clears only when no armed detour is left unanswered; re-recording against the same detour moves the earlier verdict to `superseded`. `--amendments none` records no amendments, each `--amendment` is kept verbatim (a `;` inside stays inside), and the two flags together are refused.
   </Step>
 </Steps>
 
@@ -58,6 +60,8 @@ The gate guard is a `PreToolUse` hook that mechanically blocks `Edit`, `Write`, 
 - **On by default** — no configuration required.
 - **Unconditional** — it fires regardless of the repo's `gateGuard` setting. `set-gate-guard off` no longer bypasses this specific check; that flag is reserved for any future generalization of the hook mechanism.
 - **The only path past it** — run the reconcile gate and call `record-reconcile`. There is no override flag.
+- **Not erasable by an ordinary verb** (0.44.0) — `clear-active`, `set-active <other>` and archive-then-unarchive all leave the obligation owed (moving the active pointer off an owing epic warns), and `update-epic <epic> --clear-links` and `remove-epic <detour>` are refused while it stands. The render heal clears it only where nothing could ever answer it (no frame, no armed or pre-0.44.0 `may-invalidate` link), and says so on stderr.
+- **Closed when state cannot be read** (0.44.0) — while `.conductor/state.json` exists but cannot be read, the hook blocks `Edit`/`Write`/`NotebookEdit` too, because whether a reconcile is owed is then unknown. Bash is not matched, so the git remedies stay runnable; see `/pm:gate-guard`.
 
 This means the gate guard is a genuine enforcement mechanism, not a reminder. An agent mid-task cannot accidentally start writing code on a stale plan because a hook blocks the write at the tool level before any edit reaches the filesystem.
 
@@ -81,6 +85,8 @@ node "$ENGINE" record-gate-review <epicId> --gate 1|2 --verdict pass|fail [--rev
 ```
 
 This writes `{verdict, reviewedAt, note?}` onto `epic.gateReview.gate1` or `epic.gateReview.gate2` in `state.json`. Gate 2 is mechanically enforced: `update-epic <id> --status archived` **rejects** the transition for any `openspec`-lane epic that doesn't already have a `gateReview.gate2.verdict === "pass"` recorded. Gate 1 is not itself required at archive time (it gates code, which already happened earlier), though recording it is good practice.
+
+As of 0.44.0 a Gate 2 verdict's `--base-sha`/`--head-sha` are resolved when recorded and stored as full object names (a bound that is not a commit in this clone is refused), and the verdict is fresh only when its `headSha` reaches EVERY commit attributed to the epic — not only the last. See `/pm:epic` for the refusals.
 
 Non-`openspec`-lane epics (`superpowers`, `claude-code`, `decision`, `external`) are completely unaffected by the two-gate check. It never runs for them.
 

@@ -37,6 +37,23 @@ Each rule uses the format `"<match>:<lane>"`:
 
 Re-running `set-lane-routing` merges — only what you pass changes.
 
+**At least one operation is required (0.44.0).** A bare `set-lane-routing` used to write an empty `laneRouting: {overrides: []}` block where none existed and report success. It now exits 1 before reading or writing anything:
+
+```text
+conductor: set-lane-routing needs an operation — --add "<match>:<lane>", --remove "<match>" or --clear. Nothing was written.
+```
+
+There is no read form; `.conductor/state.json` holds the overrides, and `suggest-lane` applies them.
+
+**Quote the text you pass to `suggest-lane`.** It reads ONE argument. Unquoted, `suggest-lane fix a typo` used to route `fix` alone; it is now refused before anything runs:
+
+```text
+conductor: suggest-lane takes "<free text>" — 'a' is an extra argument it does not read. Nothing was written.
+  suggest-lane reads ONE text argument — quote it.
+```
+
+A quoted text that begins with `--` but is not shaped like a flag (it contains a space, say) is still text. `--help` anywhere after either verb prints its help and writes nothing.
+
 ## Looking up a lane suggestion
 
 Before assigning a lane to a new epic, your agent should call `suggest-lane` with the epic title. If a rule matches, it returns the lane and the matched pattern; if nothing matches, it returns `null` and the generic heuristic applies as normal.

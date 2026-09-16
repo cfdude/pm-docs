@@ -190,6 +190,8 @@ conductor.mjs release show 0.27.0
 
 **New in 0.41.0.** A release could be written and never read. `release show [<id>]` renders intent, target, **derived** members, deferrals and the cross-spec verdict; with no id it lists every release.
 
+`release show` takes at most one further positional; a second is refused before anything runs (0.44.0). `release show --force` is refused by the read form itself: `--force` passes the engine's command-line check because `release` mutates, and the read form declines every flag.
+
 That read-back matters more than it sounds, because of the storage asymmetry above: membership lives on the epic and is derived, while `deferred[]` lives on the release object. So a reader who opened that object saw exclusions populated and members absent — reading as _"this release has cuts and no content"_, the exact inverse of the truth.
 
 `--member` and `--defer` also shipped with **no inverse**, which is the defect class 0.40.0's own call-site rule exists to catch, found by turning that rule on a surface older than it:

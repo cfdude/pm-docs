@@ -25,6 +25,8 @@ conductor.mjs log-detour "<what you fixed>"
 
 This appends a timestamped line plus the current commit SHA to `.conductor/detours.log`. Then resume the paused work as normal.
 
+**Quote the text (0.44.0).** The log is append-only, so the engine refuses a line it would record wrong rather than writing it: an unquoted word shaped like a flag is refused (`log-detour fixed --no-verify usage` → `conductor: unknown flag --no-verify for log-detour — it accepts: --force`, then `If '--no-verify' is part of the text, quote the whole value.`), and `--help` anywhere after the verb prints help instead of appending. `--force` is never part of the text: `log-detour fixed it --force` records `fixed it`.
+
 If you invoke `/pm:detour --minimal "<what>"`, PM takes exactly this path and stops — no classification prompt, no push.
 
 ## Substantial detour (full flow)
@@ -41,6 +43,21 @@ When a detour is substantial, follow these steps before building anything:
 6. Set the detour epic as active, then create its OpenSpec proposal and build through the normal propose → review → apply → review → commit → archive loop.
 
 **Example:** You're mid-build on `api-gateway` (openspec, P1) when you discover webhook HMAC verification is broken in production. That's substantial — it needs its own spec, and its fix will change the shared request-validation path the `api-gateway` work depends on. PM pauses `api-gateway`, pushes a stack frame, and creates `webhook-hmac-fix` (P0, role: detour), then opens a fresh proposal for it.
+
+### The reconcile choice is recorded on the link, per detour (0.44.0)
+
+- **`--reconcile` writes `reconcileOnResume: true` onto the parent's `may-invalidate` link to this detour** — the ARMED record `/pm:resume`'s `record-reconcile` must later answer, and the only thing that arms one (a link supplied by hand with `--link` is written `false`). `--no-reconcile` writes `false` on a link it creates and never lowers an existing `true`. Pushing `--reconcile` again to a detour already answered re-arms it: the earlier verdict moves to `superseded` and a new one is owed.
+- **A `--no-reconcile` push never cancels an earlier obligation.** The parent's `reconcileNeeded` is ORed, not overwritten, so pausing an epic that still owes a verdict says so instead of claiming there is nothing to reconcile:
+  ```text
+  conductor: paused 'p' and made detour 'd2' active — no reconcile for 'd2'; 'p' still owes a reconcile against 'd'
+  ```
+  and the later pop prints the RECONCILE GATE for `d` rather than a Honcho line saying no reconcile was required.
+- **While the parent owes, its record is protected.** `update-epic <parent> --clear-links` (including the one-write clear-and-re-supply repair) and `remove-epic <detour>` are refused until the verdict is recorded, because each would strip the link the verdict must name:
+  ```text
+  conductor: cannot remove 'd' — still held by 1 reference(s) that cannot be stripped.
+    1 reconcile obligation link(s): epic `p` links[] (a reconcile it owes is recorded against it) → `d`. Removing it would leave the owed verdict nothing to be recorded against. Answer it first — `record-reconcile p --detour d --verdict valid|invalidated` — then remove.
+  ```
+  `remove-epic` is for a detour registered in error, and even then it waits for the verdict. Correcting a link's reason with a same-target `--link` keeps its arming record and any verdict.
 
 ## Honcho memory
 

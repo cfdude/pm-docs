@@ -38,6 +38,7 @@ A log that grows without limit in every repository is a papercut every user inhe
 - **Segmented** files named by timestamp, so "since when" and "how old" are answerable from the filename without opening anything.
 - **A per-project cap**, pruned oldest-first at a rotation boundary — and never down to zero segments.
 - **`purge-logs` refuses twice**: nothing without a selector, and nothing without an explicit confirmation flag. A `--dry-run` shows what would go.
+- **An undeclared flag is refused by name** (0.44.0). `activity --bogus` exits non-zero rather than printing the report. One pre-dispatch check refuses an undeclared flag and a surplus positional on every engine verb, before anything is written, naming the flags the verb does accept — so a typo answers no question at all rather than quietly answering a different one. `set-activity-log`'s `on|off` is its one positional, so `set-activity-log on extra` is refused too. `--help` anywhere after the verb prints help and toggles nothing. `purge-logs` accepts `--force` because it mutates, and it has no effect there.
 - The log directory is **git-ignored automatically**, so it never becomes a permanently untracked file in your working tree.
 
 **Off by default.** `set-activity-log on` is a deliberate choice, and `off` stops it without removing what was already recorded.
