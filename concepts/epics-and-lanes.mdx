@@ -65,7 +65,7 @@ Epics can be related to each other via typed links. Links are directional and re
 |-----------|---------|
 | `depends-on` | This epic relies on the linked epic's output. `/pm:next` skips any epic whose `depends-on` target is still unresolved and names the blocking epic explicitly. |
 | `resolves-blocker-for` | This epic (typically a detour) exists to unblock the linked epic. Set on the detour. |
-| `may-invalidate` | The linked epic's design **may have been invalidated** by this epic's changes. Set on the parent when a detour is pushed. This is the reconcile relationship — it connects a detour to the epic it might have made stale. |
+| `may-invalidate` | The linked epic's design **may have been invalidated** by this epic's changes. Set on the parent when a detour is pushed. This is the reconcile relationship — it connects a detour to the epic it might have made stale. Carries the arming record `reconcileOnResume` (0.44.0): `true` only from `push-detour --reconcile`, `false` from `--no-reconcile` or a link supplied by hand, and `record-reconcile` answers only an armed link. |
 | `relates-to` | A general association between two epics — no ordering or dependency semantics. |
 
 The `may-invalidate` link is the most important in the system. When the detour is archived and `/pm:resume` runs, the reconcile gate re-validates the paused proposal against what the detour actually shipped. The verdict is written back durably onto this link as `{verdict, amendments, reconciledAt}`.

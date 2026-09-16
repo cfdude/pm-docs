@@ -47,7 +47,7 @@ This is the most important step. Before touching a single file, run `/pm:detour 
     PM registers a new epic for the detour — `role: detour`, priority `P0` by default, in the appropriate lane for the scope of work.
   </Step>
   <Step title="Cross-links are recorded">
-    Two links are written automatically: the detour `resolves-blocker-for` the paused parent, and the parent `may-invalidate` the detour. These links are what the reconcile gate reads when you resume.
+    Two links are written automatically: the detour `resolves-blocker-for` the paused parent, and the parent `may-invalidate` the detour. These links are what the reconcile gate reads when you resume. As of 0.44.0 the parent's `may-invalidate` link records the reconcile choice per detour (`reconcileOnResume`), a `--no-reconcile` push never cancels an earlier obligation, and while a verdict is owed `update-epic <parent> --clear-links` and `remove-epic <detour>` are refused — see `/pm:detour` and `/pm:resume`.
   </Step>
   <Step title="Build the detour">
     Work through the detour epic using its lane's normal workflow — OpenSpec proposal flow, Superpowers plan, or a direct claude-code build. PM tracks it in the queue as active.
@@ -67,7 +67,7 @@ This is the most important step. Before touching a single file, run `/pm:detour 
 1. **Verify** the detour epic is `archived` and its work is committed. If it's not, it's not time to resume — finish the detour first.
 2. **Pop** the top stack frame from `detourStack`. Set the paused epic's status back to `active` and update the `active` pointer.
 3. **Run the reconcile gate** — if the stack frame had `reconcileOnResume: true`, PM delegates a fresh-context review to a dedicated reconcile agent via the Task tool, passing the paused epic id and the detour epic id. The agent re-reads the paused proposal cold, diffs what the detour actually shipped, and reports back a verdict.
-4. **Write the verdict back durably** — this is what actually clears `reconcileNeeded`. The result is not just narrated in the transcript; it is attached to the paused epic's link in `.conductor/state.json` via `record-reconcile`.
+4. **Write the verdict back durably** — this is what actually clears `reconcileNeeded`. The result is not just narrated in the transcript; it is attached to the paused epic's link in `.conductor/state.json` via `record-reconcile`. As of 0.44.0 there is one form — `--amendments none`, or one `--amendment "<line>"` per AMENDMENTS line — the verdict is accepted only against a detour the epic was paused for with `--reconcile` after its frame is popped, and `reconcileNeeded` clears only when no armed detour is left unanswered.
 5. **State the next story** — after a valid or amended reconcile, PM tells you exactly which story to build next on the resumed epic.
 
 ## What the reconcile gate checks

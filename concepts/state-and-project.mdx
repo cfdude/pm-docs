@@ -15,10 +15,47 @@ Three files live here. Each has a distinct purpose and a distinct write policy.
 ├── state.json           # state of record — never hand-edit
 ├── detours.log          # append-only trail of all detour events
 ├── commit-watch.json    # HEAD watermark the commit hook observes (git-ignored)
-└── honcho-memories.log  # ready-to-copy Honcho memory lines
+├── honcho-memories.log  # ready-to-copy Honcho memory lines
+├── state.json.lock      # held only for the milliseconds of one save; .lock.break while a stale
+│                        #   one is broken. Git-ignored (state.json.lock*), as is a save's
+│                        #   state.json.tmp-* left by a save killed mid-write
+└── session-claim.json   # the repo claim marker (git-ignored, session-claim.json*)
 ```
 
 The directory is created by `/pm:init` and managed entirely by the PM engine after that. Only `state.json` is the authoritative source; the other two are logs and should never be edited directly.
+
+## Writing state — exit codes, the lock, and what the engine refuses to guess (0.44.0)
+
+**Read the exit code before you react.** They mean different things and want different responses:
+
+| Exit | Meaning | What you do |
+| --- | --- | --- |
+| 1 | the command line was wrong (bad flag, value out of range — e.g. `claim --ttl` above 10080) | fix the invocation |
+| 2 | a hook blocked (`gate-guard`) or is telling you something (`commit-nudge`) | read stderr; act on it |
+| 9 | a write conflict: another writer saved first, or holds the state lock | reload and retry — it is retryable |
+| 11 | a file this verb depends on is in a state the engine will not guess about | a HUMAN-FIXABLE FILE — retrying cannot help; fix the file the message names |
+
+**An unreadable `state.json` is refused, never replaced — exit 11.** Present but unparseable (conflict markers after a merge, truncation) or the wrong shape (top level not an object, `epics` or `detourStack` present and not an array, an `epics` element not an object): every verb that reads state refuses and writes nothing, and `--force` does not override it. Before this, such a file loaded as an empty record: `add-epic` over a conflicted three-epic file exited 0 and left only the new epic. ABSENT is still dormancy. The message names the reason and the remedies:
+
+```text
+conductor: .conductor/state.json cannot be read — it does not parse as JSON (Unexpected token '<', "<<<<<<< HE"... is not valid JSON). Nothing was written.
+  If a merge left conflict markers:  git checkout --ours .conductor/state.json   (or --theirs)
+  If the markers were committed:     git show <good-rev>:.conductor/state.json > .conductor/state.json
+  To discard local damage:           git restore .conductor/state.json
+  Never committed (git has no copy): mv .conductor/state.json .conductor/state.json.damaged
+                                     then /pm:init   (the damaged bytes are kept beside it)
+  Then re-run the command.
+```
+
+**Never hand-repair it by guessing which side of a conflict to keep** — that is the user's call. Meanwhile the hooks never write over it: `gate-guard` blocks `Edit`/`Write`/`NotebookEdit` (exit 2) and Bash is not matched, so the remedies run from the shell; `brief` injects only the warning; `snapshot` writes nothing (exit 11, never 2, which would block compaction); `commit-nudge` writes nothing but its HEAD watermark (exit 2 when a commit has landed; 0 otherwise, without reading state). `verify-state` never loads the file, and `activity` reports the revision and the log's on/off state as unknown.
+
+**Saves are serialised by a lock file.** `saveState()` holds `.conductor/state.json.lock` from the revision check through the rename and read-back, and fsyncs the temp file before the rename. A live holder is waited for up to 2 s, then the save is refused with exit 9 (machine-specific values shown as `<…>`):
+
+```text
+conductor: state.json is locked at .conductor/state.json.lock (pid <pid> on host <host> since <time>) and was not released within 2000 ms; nothing was written (read revision <n>). A lock older than 30 s is broken automatically by the next save; if no pm command is running, remove it with `rm .conductor/state.json.lock` and re-run the command.
+```
+
+**Stale rule:** a lock whose mtime is more than 30 s in the past (or in the future), or whose holder is confirmed dead on this host in this pid namespace, is broken by the next save; breakers are serialised by `.conductor/state.json.lock.break` and re-judge before removing anything, so none removes a lock it did not judge. `--force` bypasses only the revision comparison, never the lock. The residual the design accepts: a holder stalled past 30 s (a suspended laptop, a debugger) can be judged stale and, if it resumes in the instant before its rename, two writers write. This reverses 0.26.0's decision against a lock file; the stale rule is the answer to that objection, and the revision guard alone lost updates under 16 parallel writers. Do not commit or hand-delete a fresh lock while a pm command is running.
 
 ## state.json structure
 
@@ -28,7 +65,7 @@ The top-level fields of `.conductor/state.json` and what they mean:
 | --- | --- | --- |
 | `active` | `string \| null` | The currently active epic id. Set by `set-active`; cleared by `clear-active`. Never hand-edit this pointer — `set-active` also keeps `status: "active"` in sync and demotes any prior active epic. |
 | `epics[]` | `array` | The full list of epics. Each entry has `id`, `title`, `lane`, `priority`, `status`, `role`, `parent?`, `links[]`, `reconcileNeeded?`, `autonomy?`, `gateReview?`, `externalId?`, `externalUrl?`, `planPath?`, `specPath?`, `registeredBy?`, `disposition?`, and `stories[]?`. |
-| `detourStack[]` | `array` | Stack frames, LIFO order. Each frame has `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume`. |
+| `detourStack[]` | `array` | Stack frames, LIFO order. Each frame has `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume`. As of 0.44.0 the paused epic's `may-invalidate` link carries its own `reconcileOnResume` too — the ARMING record, `true` only from `push-detour --reconcile` — plus `reconciled: {verdict, amendments, reconciledAt}` once answered and `superseded` holding the previous verdict after a correction or re-arm. |
 | `tracker` | `object?` | Optional external tracker config (`system`, `instance`, `projectKey`, `mechanism`, `repo`, `statusIntent`). Set via `/pm:tracker`. |
 | `gateGuard` | `boolean?` | Repo-level PreToolUse guard toggle. Reserved for future hook generalizations — this flag no longer controls the reconcile-owed check, which blocks unconditionally whenever `reconcileNeeded: true` regardless of this setting. |
 | `reviewMode` | `"off" \| "standard" \| "thorough"` | Repo-level review intensity dial. Defaults to `standard`. A single epic can escalate above this with `update-epic <id> --review-mode`, but never de-escalate below it. |
@@ -106,6 +143,7 @@ The rules block is:
 - **Re-injected by the `SessionStart` hook** via `additionalContext` on every session open, resume, and compaction recovery, so the rules survive context loss.
 - **Refreshable via `/pm:upgrade`** after a plugin update — run it to pull in any new rules or behavioral changes from the latest version.
 - **Idempotent** — deleting the block from `CLAUDE.md` and re-running `/pm:init` or `/pm:upgrade` restores it safely. To permanently opt out, delete the block and do not run upgrade.
+- **Located by whole marker LINES and written literally** (0.44.0). Exactly one BEGIN line then one END line → replaced in place, every byte outside untouched, line endings following the file's; no marker lines → appended; any other arrangement (an orphan marker, two blocks) → refused, exit 11, naming every marker's line number, rules file untouched. A marker quoted in prose or inline code is ordinary text. `init` and `upgrade` check before their first write and write nothing — a refused upgrade never stamps `pmVersion`. `write-rules`, `set-tracker` and `set-review-mode` refuse AT the block write, after their state save: delete the stray lines (shell, highest line number first), then run `write-rules` and `render` — NOT a re-run of the verb. The full refusal is on `/pm:review-mode`.
 
 <Warning>
   **`CLAUDE_PROJECT_DIR` decides which repository every path below belongs to.** When it is set, it overrides the working directory — which is correct and load-bearing for hooks and cross-repo dispatch, and silently catastrophic when the value is stale. As of 0.33.0 the engine warns, naming both repositories and how to undo it, when the variable resolves elsewhere **and** the directory you are standing in has a conductor of its own. It warns and never refuses: the defect was that a redirect looked identical in the output, not that redirects happen.
