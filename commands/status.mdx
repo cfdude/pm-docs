@@ -62,7 +62,7 @@ The engine infers this from nothing else: not the wording, not the commands the 
 
 ## Auditing the record itself — `integrity`
 
-`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A recorded commit sha the repository can no longer resolve — orphaned by a squash-merge and due for deletion at the next `gc`, or already gone. An epic left open in a release that already delivered, and not among the epics that release cut on purpose. An epic something else declares it supersedes, still sitting queued or active. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no (or a withdrawn) Gate 1. An epic archived with an `ungated` Gate 2. An archived openspec-lane epic whose Gate 2 was withdrawn and not recorded again (`archived-with-withdrawn-gate-2`, 0.43.0). An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to. An epic in a status the engine does not define.
+`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A recorded commit sha the repository can no longer resolve — orphaned by a squash-merge and due for deletion at the next `gc`, or already gone. An epic left open in a release that already delivered, and not among the epics that release cut on purpose. An epic something else declares it supersedes, still sitting queued or active. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no (or a withdrawn) Gate 1. An epic archived with an `ungated` Gate 2. An archived openspec-lane epic whose Gate 2 was withdrawn and not recorded again (`archived-with-withdrawn-gate-2`, 0.43.0). An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to. An epic in a status the engine does not define. A `github-issues` tracker whose recorded repo is not `owner/name` or `HOST/owner/name` (`tracker-repo-not-a-github-repository`, 0.45.0) — such a repo gets no literal `gh` step until it is re-recorded, and the finding carries the re-record command, plus, for a secondary, its `--remove` printed shell-quoted.
 
 ```bash
 conductor.mjs integrity
@@ -97,6 +97,12 @@ conductor.mjs unconsidered-outcomes
 ```
 
 Each row names **who** stamped it (the 0.27.0 migration and the archive-drift heal are different histories, and which one it was changes how much of the epic's story is still recoverable) and carries the exact `update-epic … --status archived --outcome … --reason … --no-deferrals` invocation that would record a real disposition.
+
+### `deliveredBlockedBy` — what stands between this epic and `delivered` (0.45.0)
+
+Every entry now carries `deliveredBlockedBy`, always present and `[]` when nothing blocks. Each element is `{kind, detail, remedy}` — one per obligation standing in the way of a `delivered` archive, **in the order to run them** (Gate 2 before the handoff). A checkbox-source epic's handoff remedy is the `delivered` archive itself carrying `--carried-to <epicId> --reason "<which tasks moved>"`, because the gate refuses a `delivered` archive over open tasks unless the work is handed to a registered epic.
+
+That closes a measured papercut: `unconsidered-outcomes` and `integrity`'s `epic-in-undefined-status` used to offer a `delivered` choice the archive gate would then refuse — 12 of 20 entries in one run printed a command that exited 1 — and one checkbox handoff blocker printed an empty remedy. `delivered` is now offered only where the gate would accept it.
 
 **Both halves of the predicate are load-bearing.** An evidence-derived stamp — a `delivered` written from a passing Gate 2 — is **excluded**, because re-deciding it would ask you to re-derive what the record already got right. So is an agent-recorded outcome of any value, because somebody was asked. A stamp alone or an `unknown` alone would each sweep in the wrong population.
 
@@ -182,6 +188,7 @@ conductor.mjs release show 0.27.0
 ```
 
 - **Intent prose is required to create one** — an id with no statement of what it is for is unreadable later, which is the failure this records against.
+- **A new release id is validated first (0.45.0)** — it must match `^[a-z0-9][a-z0-9._-]*$`, checked before the missing-intent refusal (which prints the id inside a command) and before any write. An existing release with a legacy id is still updated and shown.
 - **Membership is one-way.** It lives on the epic as `epic.release`, at most one, and the release object carries no member list to fall out of step with it.
 - **The engine proposes nothing.** No epic is auto-assigned; adding, re-prioritizing, or archiving epics changes membership for none of them. Grouping is a scope judgment, and the scope judgment is the thing being preserved.
 - **An exclusion is not an ending.** A deferred epic keeps its status and gets no disposition of its own — it stays in the backlog because it is still work someone may do. What it loses is membership of that release.

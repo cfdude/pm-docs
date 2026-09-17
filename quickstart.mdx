@@ -72,7 +72,7 @@ After [installing PM](/installation), run `/pm:init` in any project to activate 
   <Step title="Start building">
     Work in your chosen epic's lane. The conductor stays aware via hooks:
 
-    - After each `git commit`, a `PostToolUse` hook nudges you to update the epic's status and auto-detects whether the commit shape looks like an unlogged minimal detour.
+    - After each `git commit`, a hook on `PostToolUse` **and** `PostToolUseFailure` nudges you to update the epic's status with `update-epic`, reports every commit that landed since its last observation, and auto-detects whether the commit shape looks like an unlogged minimal detour.
     - If an interrupt arrives mid-build, use `/pm:detour` to classify and handle it:
 
     ```bash

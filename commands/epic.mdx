@@ -85,6 +85,7 @@ Every engine verb on this page is held to one pre-dispatch check, which runs bef
 - **An undeclared flag is refused by name**, with the flags the verb does accept.
 - **Quote every multi-word value.** A token no flag consumed is a positional, and one beyond what the verb reads is refused before anything is written: `conductor: add-epic takes no positional arguments — 'Title' is an extra argument it does not read. Nothing was written.` followed by `If 'Title' belongs to --title's value, quote the whole value.`
 - **An epic id is positional wherever a verb takes one.** `remove-epic --id e2`, `set-active --id e2` and the rest are diagnosed with the line you meant, not only on `update-epic`.
+- **An id the engine prints is shell-quoted, and a broken one yields no command (0.45.0).** Every invocation the engine prints that names an epic or release id goes through `printedId()`: an id outside the id format (a legacy `My Plan`) is shell-quoted so the printed line runs as written, and an id holding a control character prints no command at all — `<kind> '<escaped id>' holds a control character; no verb can rename it` — rather than a hand-edit instruction. A non-id value in a printed command (a session name, a spec path, a plan path) takes a placeholder when it holds one. Relatedly, `sync` no longer registers a change directory, plan file or archive directory whose name holds a control character or whitespace as an epic id: it registers the rest and names the skipped one on stderr on every run, quiet included. Rename it to register it.
 - **`--force` is accepted on every mutating verb here** — `add-epic`, `add-many`, `update-epic`, `reorder`, `remove-epic`, `set-active`, `clear-active`, `set-autonomy` and `record-gate-review` — and refused on read-only verbs. It belongs to the guarded write of `.conductor/state.json`, not to any verb's parser, so it may stand anywhere on the line and is never read as an id. `add-epic`, `update-epic` and `claim` used to refuse it outright. `node "$ENGINE" <verb> --help` lists it under "Accepted on every mutating verb".
 
 ## Bulk create with add-many
@@ -435,9 +436,11 @@ All of `--preauthorize`, `--context`, and `--notify` are **additive** — re-run
 ## Recording a gate verdict
 
 ```bash
-conductor.mjs record-gate-review <id> --gate 1|2 --verdict pass|fail \
+conductor.mjs record-gate-review <id> --gate 2 --verdict pass|fail \
   --base-sha "<a>" --head-sha "<b>" --reviewer "<identity>"
 ```
+
+**One form per gate (0.45.0).** A `--gate 1|2 --verdict pass` with no evidence exits 1, and a sha range recorded against Gate 1 records the wrong kind of evidence entirely. Gate 1's form is below; every doc that taught a single combined form was corrected.
 
 <Note>
   **Gate 1 records artifact paths, not a commit range (0.41.0).** A passing verdict used to require `--base-sha`/`--head-sha` on _either_ gate — but Gate 1 reviews spec artifacts **by path, before code exists**, so the only way to satisfy it was a range of artifact commits, which every downstream consumer then reads as an implementation range.

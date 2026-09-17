@@ -34,7 +34,7 @@ A typical working day with PM follows a clear rhythm:
     Work through the epic using whatever workflow its lane requires — an OpenSpec proposal flow, a Superpowers plan, or a direct claude-code build. PM tracks status but stays out of your way while you build.
   </Step>
   <Step title="Commit and update status">
-    After each `git commit`, PM's `PostToolUse` hook nudges you to update the epic's status in `.conductor/state.json`. This keeps the index honest and re-renders `PROJECT.md` automatically.
+    After each `git commit`, PM's commit hook nudges you to update the epic's status with `update-epic` — the verb, never a hand-edit of `.conductor/state.json`. This keeps the index honest and re-renders `PROJECT.md` automatically.
   </Step>
   <Step title="Sync new work">
     Run `/pm:sync` to register any new OpenSpec proposals or Superpowers plans that appeared on disk since your last session. If a `github-issues` tracker is configured, this also pulls open issues in as untriaged epics.
@@ -73,7 +73,7 @@ You do not need to do anything special after a compaction. PM handles the handof
 
 ## After every git commit
 
-The `PostToolUse` hook fires after every Bash tool use. PM runs `commit-nudge`, which asks **whether a commit actually happened** and does two things:
+PM runs `commit-nudge` after every Bash tool use — on `PostToolUse` when the call succeeded and, **as of 0.45.0, on `PostToolUseFailure` when it failed**, so a commit made inside a call that then exited non-zero is no longer invisible. The output envelope names the event it answers. A failed Bash call now spawns one hook process (63 ms per no-op run, mean of 20); a successful one gains none. The hook asks **whether a commit actually happened** and does two things:
 
 1. Re-renders `PROJECT.md` so the index stays current.
 2. Inspects the commit to detect whether it looks like an unlogged minimal detour — a small, self-contained fix that happened silently. If it does, PM suggests running `log-detour` to append a timestamped record to `.conductor/detours.log`.
@@ -88,9 +88,19 @@ The nudge is non-blocking. It surfaces the suggestion and moves on — it does n
   Every read is three-valued: no git, not a repository, no reflog, or a missing watermark all fall back to the previous behaviour rather than erroring.
 </Note>
 
+<Note>
+  **As of 0.45.0 it reports EVERY commit since a reflog anchor, not just HEAD.** The watermark was a single position, so a commit followed by a `checkout` in the same call read as no commit at all — and the watermark had already moved past it, so no later call reported it either. Two commits in one call reported only the last. The hook now keeps an anchor in `.conductor/commit-observe.json` — the reflog's byte size and its last line, stored as bytes (`anchor.lineBase64`, since a reflog is not guaranteed to be UTF-8) — plus the set of shas it has already named, and reports every `commit…` entry after the anchor, oldest first. The attribution command carries every `--attribute-commit`, in landing order, as one invocation.
+
+  **Every report states its provenance.** The commits "landed since the last observation — this call, another terminal, or a parallel call; the hook cannot tell which." It never claims your call made them. A commit made in another terminal is still reported, and can still be auto-logged against the active epic — a stated residual, corrected with `retract-detour`.
+
+  **A commit it could not have attributed safely is not offered.** One rewritten by `pull --rebase` or reset away is named as rewritten or abandoned, with no row and no `--attribute-commit`. **An amend replaces:** the replaced commit's automatic row is retracted and, for each epic that attributed it, `update-epic <id> --withdraw-commit <replaced> --withdrawal-reason "amended into <new>"` is printed before any attribution command — or, where `update-epic` would refuse that withdrawal for a delivered epic, the hook says so rather than printing a command that fails. An undone amend replaces nothing.
+
+  **Overlapping runs cannot drop or repeat a commit.** The observation runs under an `O_EXCL` lock; a run that cannot take it within 200 ms skips and the next run reports. The lock is broken on liveness — at once for a dead holder, after 10 s where liveness cannot be confirmed, never for age alone while its holder is confirmed alive — and a run releases only its own lock.
+</Note>
+
 **As of 0.33.0 it also names the attribution command.** The gate procedure asks you to record each commit against its epic _as the commit is made_ — and until now nothing checked until the archive gate read the array, by which time the commits exist and the append-only ordering may already be broken. Now that the hook knows a commit actually landed, it prints the exact runnable command for the epic that commit belongs to.
 
-It names the **detour** epic while a detour is live, never the paused parent. And it is **louder exactly once**: while an epic has attributed nothing, the clause carries the catch-up-in-order rule, because an empty array is when catching up is most likely owed. After the first attribution it is one line. As of 0.44.0 a later catch-up is still correct — a recorded Gate 2 head must reach EVERY attributed commit, not only the last — it is simply less likely to be needed.
+**As of 0.45.0 it names every candidate, and leaves the choice to you.** While a detour is live it used to name only the detour epic; it now lists the detour epic **and each paused epic** — or the active epic when no detour is live — one runnable command each, states explicitly that choosing is the agent's, and orders a candidate whose own files the commits touch first. It never adds a candidate from paths, and it never writes an attribution itself. It is **louder exactly once**: while an epic has attributed nothing, the clause carries the catch-up-in-order rule, because an empty array is when catching up is most likely owed. After the first attribution it is one line. As of 0.44.0 a later catch-up is still correct — a recorded Gate 2 head must reach EVERY attributed commit, not only the last — it is simply less likely to be needed.
 
 <Warning>
   **A commit that only moves or deletes a change's artifacts must not be attributed** — the `/opsx:archive` move above all. That commit lands after the reviewed range by construction, so attributing it makes the epic's own Gate 2 read stale at the instant the archive gate checks it. The hook states the rule; it never classifies your commit itself.
