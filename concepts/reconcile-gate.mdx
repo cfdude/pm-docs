@@ -78,10 +78,16 @@ For `openspec`-lane epics, PM enforces two separate gate reviews across the epic
 | **Gate 1** | Before code is written, after the spec is drafted | Fresh-context spec review. Catches design problems before any implementation investment. |
 | **Gate 2** | After implementation, before docs/archive | Fresh-context implementation review. Required to archive. |
 
-Both gates are recorded with:
+**Each gate is recorded with its own evidence** — one form per gate, not one form for both (0.45.0 corrected every doc that taught otherwise; `--gate 1|2 --verdict pass` with no evidence exits 1, and a sha range on Gate 1 records the wrong kind of evidence):
 
 ```bash
-node "$ENGINE" record-gate-review <epicId> --gate 1|2 --verdict pass|fail [--reviewer "<note>"]
+# Gate 1 — the spec review. --artifact takes a path and repeats.
+node "$ENGINE" record-gate-review <epicId> --gate 1 --verdict pass|fail \
+  --artifact <path> [--reviewer "<note>"]
+
+# Gate 2 — the implementation review. Both shas are REQUIRED on a pass.
+node "$ENGINE" record-gate-review <epicId> --gate 2 --verdict pass|fail \
+  --base-sha <a> --head-sha <b> [--reviewer "<note>"]
 ```
 
 This writes `{verdict, reviewedAt, note?}` onto `epic.gateReview.gate1` or `epic.gateReview.gate2` in `state.json`. Gate 2 is mechanically enforced: `update-epic <id> --status archived` **rejects** the transition for any `openspec`-lane epic that doesn't already have a `gateReview.gate2.verdict === "pass"` recorded. Gate 1 is not itself required at archive time (it gates code, which already happened earlier), though recording it is good practice.

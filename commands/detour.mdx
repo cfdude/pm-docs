@@ -36,8 +36,8 @@ A detour is substantial when it needs its own design, changes shared behavior, o
 When a detour is substantial, follow these steps before building anything:
 
 1. Make the current epic's `tasks.md` reflect reality and commit so nothing is left uncommitted.
-2. Set the current epic's `status` to `paused` in `.conductor/state.json`.
-3. Push a stack frame with `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume: true` (default true whenever the detour will touch code the paused epic depends on).
+2. Register the detour epic first, then run `push-detour <parent> --detour <new-id> --reason "<why>" (--reconcile | --no-reconcile)`. The verb IS the transition — never hand-edit `.conductor/state.json` to push or pop a frame, because the verb is what supplies the validation, the write-conflict guard, the read-back and the Honcho line.
+3. That one write sets the parent's `status` to `paused` and pushes a stack frame holding `pausedEpic`, `pausedAt`, `reason`, `spawnedDetour`, and `reconcileOnResume` (say `--reconcile` unless you are certain the detour touches nothing the paused epic depends on — exactly one of the two flags is required and there is no default).
 4. Create the detour as a new epic with `role: detour` at P0 by default, in the appropriate lane.
 5. Record cross-links: the detour gets a `resolves-blocker-for` link pointing to the parent; the parent gets a `may-invalidate` link pointing to the detour.
 6. Set the detour epic as active, then create its OpenSpec proposal and build through the normal propose → review → apply → review → commit → archive loop.
@@ -58,6 +58,23 @@ When a detour is substantial, follow these steps before building anything:
     1 reconcile obligation link(s): epic `p` links[] (a reconcile it owes is recorded against it) → `d`. Removing it would leave the owed verdict nothing to be recorded against. Answer it first — `record-reconcile p --detour d --verdict valid|invalidated` — then remove.
   ```
   `remove-epic` is for a detour registered in error, and even then it waits for the verdict. Correcting a link's reason with a same-target `--link` keeps its arming record and any verdict.
+
+## Rows the commit hook writes for you — and `retract-detour` (0.45.0)
+
+`commit-nudge` runs after every Bash call, on success (`PostToolUse`) and on failure (`PostToolUseFailure`). It reads HEAD's reflog from the position it recorded last time and reports every commit that landed since, oldest first — including one followed by a `checkout` in the same call, and every commit of a call that made several.
+
+- **When it logs a row.** While a detour is live it writes `DETOUR-COMMIT` against the detour epic. With no detour but an active epic, a small (≤3 files) `fix:`/`chore:` commit that does not name the active epic is logged as `AUTO-DETOUR` — a minimal detour nobody declared.
+- **When it does not.** A commit touching any of the active epic's own artifacts (`openspec/changes/<id>/`, its plan path, its spec path) is that epic's work, not a detour; a commit confined to a paused epic's own artifacts writes no `DETOUR-COMMIT`. A commit touching only pm's own generated files (`state.json`, `PROJECT.md`, `render-stamp.json`, the observation record) is bookkeeping — in a nested conductor too, because paths are compared from the conductor root. A commit reachable from no branch is named as rewritten or abandoned and gets no row and no attribution command. A commit that already has a row is never given a second one, whatever that row's sha length.
+- **Provenance.** Every report says the commits _landed since the last observation — this call, another terminal, or a parallel call; the hook cannot tell which_. It never claims the call made them, so a commit from another terminal can still be logged against the active epic.
+- **An amend replaces.** When a `commit --amend` leaves the replaced commit on no branch, the engine retracts that commit's automatic row (reason `amended into <new sha>`) and, for each epic whose `attributedCommits` holds it, prints `update-epic <id> --withdraw-commit <replaced> --withdrawal-reason "…"` before any attribution command. It never withdraws anything itself. An undone amend replaces nothing.
+
+A wrong automatic row is corrected with the verb, never by editing the log — `detours.log` is git-ignored while the `PROJECT.md` it renders is tracked, so a hand-removal leaves the false row in what gets committed:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/conductor.mjs" retract-detour <sha> --reason "<why the row is wrong>"
+```
+
+It appends one `RETRACTED` row covering every `AUTO-DETOUR` and `DETOUR-COMMIT` row of that commit (matched by prefix, whatever the row's abbreviation length), removes nothing, and re-renders `PROJECT.md` without them. `<sha>` is a commit sha, not a ref — `HEAD` is refused, so run `git rev-parse <ref>` first; a sha whose commit has been pruned must be at least 7 hex characters and match one commit's rows. It refuses, naming the reason and writing nothing: no matching row, a `MINIMAL`-only row (a declaration, not retractable), an already-retracted commit, a missing or empty `--reason`, and a detached tree. There is no un-retract — re-declare with `log-detour`.
 
 ## Honcho memory
 

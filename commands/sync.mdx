@@ -44,6 +44,10 @@ description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issu
   A plan whose id no normalisation can recover — renamed to something genuinely different — is handled by attaching it once: `update-epic <id> --plan <path>`, after which rung 1 does the rest forever.
 </Info>
 
+<Note>
+  **A name that cannot be an epic id is skipped rather than registered (0.45.0).** A change directory, plan file or archive directory whose name holds a control character or whitespace is no longer registered — such a name used to be stored as an epic id, from which the engine would print commands that could not run. `sync` registers everything else and names the skipped entry on stderr on **every** run, quiet included; rename it to register it, and `integrity`'s `archive-directory-has-no-epic` says so too. Uppercase names are unaffected, and an entry an epic already holds prints nothing.
+</Note>
+
 For OpenSpec sources, deduplication is by the epic's id — if an epic with that id already exists in `state.json`, the candidate is skipped silently. For tracker items, deduplication is by `externalUrl`, which is globally unique; a bare `externalId` is only unique within one tracker/repo, so two trackers can each hold an issue numbered `#42` without colliding. The emitted registration recipe also supplies a **derived** epic id (`<system>-<scope>-<number>`), so the same item yields the same id in every repo and session and a re-run is refused as a duplicate rather than landing under an invented slug. Re-running `/pm:sync` as many times as you like is always safe.
 
 ## When to run it
@@ -72,6 +76,10 @@ conductor.mjs update-epic <id> --status archived --outcome delivered --no-deferr
 ```
 
 This closes the gap where a release ships, every tracker item closes, and every epic stays `queued` — after which the next-work recommendation confidently names work that shipped hours ago. An epic already `archived` is excluded by name, so this never adds noise to a backlog that is already correct.
+
+<Warning>
+  **Absence from an open-item list is not proof the item closed — read the item first.** It can also have been deleted, transferred, or moved out of scope. Through 0.44.0 the emitted `gh issue list` line carried no `--limit`, so `gh` stopped at 30 items and this step proposed archiving the epics of every item past the first page. 0.45.0 passes `--limit 1000` and stops on truncation instead of reading one page as the whole tracker — and the `delivered` choice is now offered only where the archive gate would actually accept it.
+</Warning>
 
 <Note>
   The engine itself only scans local files and never calls an external system directly. What you do externally is decided by each tracker's `direction`, and the rules block in your project-instruction file already carries the exact steps for whichever branch applies. An **outward-only** tracker (or one that names no scope) means sync reads nothing external — it registers local OpenSpec/Superpowers sources and stops, and its confirmation line says so.

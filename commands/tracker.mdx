@@ -115,27 +115,43 @@ Any tracker whose direction includes `inward` pulls open items **in** as new unt
 conductor.mjs set-tracker --system github-issues --repo owner/name
 ```
 
+### The repo shape is checked (0.45.0)
+
+A `github-issues` tracker's `--repo` is `owner/name`, or `HOST/owner/name` for GitHub Enterprise — letters, digits, `-`, and `.`/`_` in the name. Anything else is refused for **both roles**, before anything is read or written, because that value is spliced into a literal `gh` line: `--repo 'a/b; touch pwned'` used to be accepted and written into `CLAUDE.md`.
+
+```text
+conductor: --repo "a/b; x" is not a GitHub repository — a github-issues tracker records its repo as owner/name, or HOST/owner/name for GitHub Enterprise (letters, digits, `-`, and `.`/`_` in the name). Nothing was written.
+```
+
+**The `--remove` exemption applies to `--role secondary` only.** A legacy secondary whose stored repo predates the check stays removable; a primary `--remove` carrying a refused `--repo` used to save it anyway. `--system`, `--project` and `--repo` also refuse a control character on both roles — a primary `--remove` carrying one exited 0 and wrote a forged `## FORGED` heading into `CLAUDE.md` and `state.json`. `--role secondary --remove` is exempt there too, for the same reason.
+
+A repo whose recorded `github-issues` repo fails that shape stops receiving a literal `gh` line — it gets the vendor-neutral "list open items with your own tooling" step instead — until it re-runs `set-tracker`, and `integrity`'s new `tracker-repo-not-a-github-repository` check names it with the re-record command (and, for a secondary, its `--remove` printed shell-quoted).
+
+<Note>
+  **A primary vendor switch drops the scope it no longer applies to (0.45.0).** `set-tracker --system jira --project ABC` used to keep the old `repo`, which then headed the jira section and seeded its ids. Any of `repo`/`projectKey`/`instance` not re-given on a vendor switch is now dropped, and each dropped value is printed. A legacy `github-issues` primary with no recorded direction also used to become an **outward** jira tracker on the switch; the switch now records the direction the old tracker resolved to, and says so.
+</Note>
+
 During `/pm:sync`, your agent:
 
-1. Lists open issues with `gh issue list --repo <repo> --state open --json number,title,url,labels`.
+1. Lists open issues with `gh issue list --repo <repo> --state open --limit 1000 --json number,title,url,updatedAt,labels`. **`--limit` is not optional (0.45.0).** `gh` returns 30 items without it, so later items were never registered — and the closed-item step then read their absence as "closed" and proposed archiving their epics. The step carries a truncation stop: at 1000 items, say so rather than treat the page as the whole tracker. `updatedAt` is requested because the registration line below requires it.
 2. Checks whether an epic already carries that item's `externalUrl` — if so, skips it. `externalUrl` is globally unique; a bare `externalId` is only unique within one tracker/repo.
 3. Registers each new issue as an epic, using the recipe the rules block emits — which **runs as written**:
    ```bash
    conductor.mjs add-epic --id <derived> --status untriaged \
      --external-id <issue-number> \
-     --external-url <issue-url> \
+     --external-url=<issue-url> \
      --external-updated-at <iso> \
      --lane <lane> \
-     --title "<issue-title>" \
+     --title=<issue-title> \
      --priority P2
    ```
-   If the issue carries a `P0`/`P1`/`P2`/`P3` label, use that label's priority instead of the `P2` default.
+   **Fill every item value as ONE single-quoted word** (write an embedded `'` as `'\''`, never double quotes), and note that `--title=` and `--external-url=` stay **attached** to their values. That is not cosmetic: the engine classifies a token, not a position, so a detached `--title '--help'` is refused as an unknown flag even quoted, while `--title='--limit=5 ignored'` is one word and is read as data. Item titles used to be wrapped in double quotes with no instruction at all, which let a title like `--help` or `$(touch pwned)` act rather than register. If the issue carries a `P0`/`P1`/`P2`/`P3` label, use that label's priority instead of the `P2` default.
 4. `add-epic` itself rejects a duplicate (exits non-zero, writes nothing) as a second line of defense against a stale local view producing one.
 
 Three things about that recipe are deliberate:
 
-- **`--id` is derived, not invented** — `<system>-<scope>-<number>`, so the same item yields the same epic id in every repo and every session, and a re-run is refused as a duplicate rather than landing under a slug the agent made up from the title. Back when the emitted recipe omitted the required `--id`, two sessions hit exactly that failure the same afternoon.
-- **`<lane>` comes from lane routing** (`suggest-lane "<issue-title>"`), never a hardcoded `claude-code`. The lane decides whether the work leaves any spec, plan, or gate record — hardcoding it decided that silently for every mirrored item. Override where routing is wrong and record why with `update-epic <id> --notes "..."`.
+- **`--id` is derived, not invented** — `<system>-<scope>-<number>`, so the same item yields the same epic id in every repo and every session, and a re-run is refused as a duplicate rather than landing under a slug the agent made up from the title. Back when the emitted recipe omitted the required `--id`, two sessions hit exactly that failure the same afternoon. **A non-numeric item key derives a slug instead (0.45.0)**: the jira recipe used to derive `jira-abc-<issue-number>`, which the id format refuses for the key `ABC-123`, so it now derives `<issue-key-slug>`.
+- **`<lane>` comes from lane routing** (`suggest-lane --ask=<issue-title>`, the title filled as one single-quoted word), never a hardcoded `claude-code`. The lane decides whether the work leaves any spec, plan, or gate record — hardcoding it decided that silently for every mirrored item. Override where routing is wrong and record why with `update-epic <id> --notes "..."`.
 - **`--external-updated-at`** carries the item's own updated timestamp, so a freshly mirrored epic starts with a freshness watermark instead of immediately polluting the "never re-read" count.
 
 ## Primary \+ secondary trackers
@@ -146,6 +162,7 @@ A secondary tracker gets exactly two behaviors:
 
 1. **Inward pull** — open issues become untriaged epics, the same shape as the inward pull above, deduped by `externalUrl` (globally unique) rather than bare `externalId` (only unique within one tracker/repo — two secondary trackers can each have an issue numbered `#42` without colliding).
 2. **Completion status writeback** — when an epic sourced from a secondary tracker reaches `archived`, your agent closes the linked issue there too.
+3. **A watermark step of its own (0.45.0)** — the secondary section now emits the same "re-read the ones whose tracker timestamp is newer, and record it with `record-tracker-refresh`" step the primary inward section has. Its listing line requests `updatedAt` too; before 0.45.0 it did not, while its own registration line required one, so the recipe could not run as written.
 
 A secondary tracker **never** gets outward-created issues. That direction stays exclusive to the primary tracker.
 

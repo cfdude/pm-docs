@@ -66,6 +66,16 @@ conductor.mjs suggest-lane "add a brand-new subsystem"
 # {"lane":null,"matched":null}
 ```
 
+### `--ask=<text>` — a text shaped like a flag (0.45.0)
+
+A positional cannot carry a text that is itself flag-shaped: `suggest-lane '--limit=5 ignored'` is refused as an unknown flag, quoted or not, because the engine classifies the token rather than its position. `--ask=` is the same lookup for exactly that case — and it has to stay attached to its value:
+
+```bash
+conductor.mjs suggest-lane --ask='--limit=5 ignored'
+```
+
+The positional form is unchanged, and giving both together is refused. This is why the emitted tracker recipes route with `suggest-lane --ask=<issue-title>`, the title filled as one single-quoted word: an item title is third-party text, and a title like `--help` must register rather than act.
+
 ## The suggestion is an input, not a verdict
 
 **New in 0.36.0.** `suggest-lane` answers a **mechanical** question — does any configured pattern match this text — and the lane a change actually belongs in depends on things the engine cannot see: what the change touches, what it is for, whether it is on a milestone. That layer does not exist, so the emitted instructions now say the judgment half is **absent** rather than letting a pattern match read as a decision.

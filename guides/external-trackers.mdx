@@ -114,11 +114,18 @@ node "$ENGINE" set-tracker --system github-issues --repo owner/repo
 
 Once set, the CLAUDE.md rules block gains a "GitHub issue sync" section. During `/pm:sync`, your agent runs:
 
-1. `gh issue list --repo <repo> --state open --json number,title,url,labels`
+1. `gh issue list --repo <repo> --state open --limit 1000 --json number,title,url,updatedAt,labels`
 2. For each issue, check whether an epic already carries that item's `externalUrl` — if so, skip it. Re-running sync must never create a duplicate epic for the same issue.
-3. Register new issues with the recipe the rules block emits — `add-epic --id <derived> --status untriaged --external-id <number> --external-url <url> --external-updated-at <iso> --lane <lane> --title "<issue-title>" --priority P2` — unless the issue carries a `P0`/`P1`/`P2`/`P3` label, in which case use that priority instead.
+3. Register new issues with the recipe the rules block emits — `add-epic --id <derived> --status untriaged --external-id <number> --external-url=<url> --external-updated-at <iso> --lane <lane> --title=<issue-title> --priority P2` — unless the issue carries a `P0`/`P1`/`P2`/`P3` label, in which case use that priority instead.
+4. Re-read every already-linked item whose tracker timestamp is newer than the epic's `externalUpdatedAt` watermark, and record what you read. Secondary sections carry this step too as of 0.45.0.
 
-**That recipe runs as written.** Its `--id` is derived (`<system>-<scope>-<number>`), so the same item yields the same epic id in every repo and every session and a re-run is refused as a duplicate rather than landing under a slug the agent invented from the title. Its `<lane>` comes from lane routing (`suggest-lane`) rather than a hardcoded `claude-code` — the lane decides whether the work leaves any spec, plan, or gate record, so hardcoding it decided that silently for every mirrored item.
+**That recipe runs as written.** Its `--id` is derived (`<system>-<scope>-<number>`), so the same item yields the same epic id in every repo and every session and a re-run is refused as a duplicate rather than landing under a slug the agent invented from the title; a non-numeric item key (`ABC-123`) derives a slug rather than an id the format refuses. Its `<lane>` comes from lane routing (`suggest-lane --ask=<issue-title>`) rather than a hardcoded `claude-code` — the lane decides whether the work leaves any spec, plan, or gate record, so hardcoding it decided that silently for every mirrored item.
+
+<Note>
+  **0.45.0 fixed four ways this recipe could not run as written.** `gh issue list` stops at 30 items without `--limit`, so later items were never registered **and** the closed-item step read their absence as "closed" and proposed archiving their epics — the step now passes `--limit 1000` and stops on truncation rather than treating one page as the whole tracker. The secondary listing line requested no `updatedAt` while its own registration line required one, and the secondary section had no watermark step at all. Item values are now filled as ONE single-quoted word and emitted attached (`--title=`, `--external-url=`, `suggest-lane --ask=`), so a title like `--help` or `$(touch pwned)` stays data rather than acting. And both inward sections pointed at a `/pm:epic list` that does not exist — read `.conductor/state.json` or use `/pm:status`.
+
+  A `github-issues` `--repo` is also refused unless it is `owner/name` or, for GitHub Enterprise, `HOST/owner/name`: it is spliced into a literal `gh` line, and `--repo 'a/b; touch pwned'` was previously accepted. A repo whose recorded value fails that shape gets the vendor-neutral step instead of a `gh` line until it re-runs `set-tracker`, and `integrity`'s `tracker-repo-not-a-github-repository` names it.
+</Note>
 
 ## Freshness and the refresh gate
 

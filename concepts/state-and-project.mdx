@@ -14,7 +14,8 @@ Three files live here. Each has a distinct purpose and a distinct write policy.
 .conductor/
 ├── state.json           # state of record — never hand-edit
 ├── detours.log          # append-only trail of all detour events
-├── commit-watch.json    # HEAD watermark the commit hook observes (git-ignored)
+├── commit-observe.json  # the commit hook's reflog anchor + the shas it has reported
+│                        #   (git-ignored, commit-observe.json*, which covers its .lock)
 ├── honcho-memories.log  # ready-to-copy Honcho memory lines
 ├── state.json.lock      # held only for the milliseconds of one save; .lock.break while a stale
 │                        #   one is broken. Git-ignored (state.json.lock*), as is a save's
@@ -47,7 +48,7 @@ conductor: .conductor/state.json cannot be read — it does not parse as JSON (U
   Then re-run the command.
 ```
 
-**Never hand-repair it by guessing which side of a conflict to keep** — that is the user's call. Meanwhile the hooks never write over it: `gate-guard` blocks `Edit`/`Write`/`NotebookEdit` (exit 2) and Bash is not matched, so the remedies run from the shell; `brief` injects only the warning; `snapshot` writes nothing (exit 11, never 2, which would block compaction); `commit-nudge` writes nothing but its HEAD watermark (exit 2 when a commit has landed; 0 otherwise, without reading state). `verify-state` never loads the file, and `activity` reports the revision and the log's on/off state as unknown.
+**Never hand-repair it by guessing which side of a conflict to keep** — that is the user's call. Meanwhile the hooks never write over it: `gate-guard` blocks `Edit`/`Write`/`NotebookEdit` (exit 2) and Bash is not matched, so the remedies run from the shell; `brief` injects only the warning; `snapshot` writes nothing (exit 11, never 2, which would block compaction); `commit-nudge`, on `PostToolUse` and `PostToolUseFailure` alike, writes nothing — the observation record included, so a commit that landed meanwhile is reported by the first run after the file is repaired (exit 2 when a commit has landed; 0 otherwise, without reading state). `verify-state` never loads the file, and `activity` reports the revision and the log's on/off state as unknown.
 
 **Saves are serialised by a lock file.** `saveState()` holds `.conductor/state.json.lock` from the revision check through the rename and read-back, and fsyncs the temp file before the rename. A live holder is waited for up to 2 s, then the save is refused with exit 9 (machine-specific values shown as `<…>`):
 
@@ -119,7 +120,21 @@ The `SessionStart` hook re-injects the briefing via `additionalContext` every ti
 2026-07-15T17:45:00Z · b7e2d44 · substantial-pop · fix-auth-middleware → my-feature-epic · "reconcile: valid"
 ```
 
-Every minimal detour is logged here by the `log-detour` subcommand. Substantial pushes and pops are logged automatically. The `PostToolUse` hook also auto-detects unlogged minimal detours from the commit's shape — file count, commit prefix, whether an epic is active at all, and whether an active detour is already open — and logs them without requiring a manual `/pm:detour --minimal` invocation.
+Every minimal detour is logged here by the `log-detour` subcommand. Substantial pushes and pops are logged automatically. The commit hook — on `PostToolUse` **and** `PostToolUseFailure` since 0.45.0 — also auto-detects unlogged minimal detours from the commit's shape — file count, commit prefix, whether an epic is active at all, and whether an active detour is already open — and logs them without requiring a manual `/pm:detour --minimal` invocation.
+
+As of 0.45.0 the log's own fields are escaped at write: the engine parses this file by line and tab, so a newline or a tab inside a detour reason or note can no longer start a row the engine never wrote. The same escaping runs on `.conductor/honcho-memories.log`, one line per entry.
+
+<Note>
+  **0.45.0 stopped the hook logging work that was never a detour.** A commit touching the active epic's own artifacts (`openspec/changes/<id>/`, its plan path, its spec path) writes no `AUTO-DETOUR` row, and a commit confined to a paused epic's own artifacts writes no `DETOUR-COMMIT` row — decided from the paths, never from a subject prefix. A nested conductor no longer logs its own bookkeeping either: changed paths are compared from the conductor root, so a commit touching only `projects/sub/.conductor/state.json` and `projects/sub/PROJECT.md` is bookkeeping, while a mixed commit touching a file outside that root is still logged.
+</Note>
+
+**A wrong automatic row is corrected with a verb, never by editing this file.** `detours.log` is git-ignored while the `PROJECT.md` it renders is tracked, so a hand-removal leaves the false row in what gets committed. 0.45.0 added the inverse of the hook's logging:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/conductor.mjs" retract-detour <sha> --reason "<why the row is wrong>"
+```
+
+It appends one `RETRACTED` row covering every `AUTO-DETOUR` and `DETOUR-COMMIT` row of that commit, removes nothing, and re-renders `PROJECT.md` without them. `<sha>` is a commit sha, not a ref — `HEAD` is refused. It also refuses, naming why and writing nothing: no matching row, a `MINIMAL`-only row (a declaration, not retractable), an already-retracted commit, a missing or empty `--reason`, a too-short or ambiguous sha of a pruned commit, and a detached tree. There is no un-retract — re-declare with `log-detour`. See [`/pm:detour`](/commands/detour) for the full rule.
 
 <Note>
   **Two corrections shipped in 0.32.0.** The hook used to log a spurious minimal detour for a perfectly ordinary commit when **no epic was active** — there is no work to detour _from_ in that case, so nothing is logged now. And the detection reads the repository rather than the command text, so a commit in any flag form is seen and a command that merely _mentions_ `git commit` is not.

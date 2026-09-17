@@ -65,6 +65,28 @@ The escalation rules are strict:
 
 To query the effective mode for a specific epic, read `state.epics[].reviewMode` alongside `state.reviewMode`.
 
+**An override has an unset (0.45.0).** This page used to say there was none; there is:
+
+```bash
+conductor.mjs update-epic <id> --clear review-mode
+```
+
+That drops the epic's override and returns it to the repo dial. It is not the same as `--review-mode off`, which is a de-escalation and stays refused.
+
+## Recording the verdict this dial asked for
+
+The dial is lane-agnostic, and `record-gate-review` accepts any lane to match. **Each gate takes its own kind of evidence, and 0.45.0 corrected every form that taught otherwise** — a `--gate 1|2 --verdict pass` with no evidence exited 1, and a sha range recorded against Gate 1 records the wrong kind of evidence entirely:
+
+```bash
+# Gate 1 — the spec review. Evidence is the artifacts reviewed (--artifact repeats).
+conductor.mjs record-gate-review <id> --gate 1 --verdict pass|fail --artifact <path>
+
+# Gate 2 — the implementation review. Evidence is the range reviewed; both are REQUIRED on a pass.
+conductor.mjs record-gate-review <id> --gate 2 --verdict pass|fail --base-sha <a> --head-sha <b>
+```
+
+Recording one creates no archive obligation — the archive gate stays openspec-only.
+
 <Note>
 The review mode setting is stored in `state.json` under `reviewMode`. It persists across sessions and is re-applied by every fresh `CLAUDE.md` rules refresh — you do not need to re-run `set-review-mode` after a context compaction.
 </Note>
