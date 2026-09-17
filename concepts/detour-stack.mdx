@@ -74,8 +74,8 @@ When `/pm:detour` classifies an interruption as substantial, the following steps
   <Step title="Commit all uncommitted work">
     Make the current epic's progress source (e.g. `tasks.md`) reflect reality, then commit so nothing is left staged or dirty. The paused epic's state must be clean before it's parked.
   </Step>
-  <Step title="Pause the current epic">
-    Set the current epic's `status` to `paused` in `.conductor/state.json`.
+  <Step title="Register the detour epic">
+    Pausing the current epic is never a hand-edit: `push-detour` below writes `status: paused` itself, in the same guarded write as the frame. What this step needs is the detour registered as its own epic — the appropriate lane, usually priority `P0` — so the PUSH has something to name.
   </Step>
   <Step title="Push a frame onto detourStack">
     ```bash
@@ -122,7 +122,7 @@ When the detour epic is archived and `/pm:resume` runs:
     It matters more here than on the push. POP removes the frame _before_ reconciliation runs, and the archive heal clears `reconcileNeeded` for any epic with no live frame — so done as two separate writes, the obligation is destroyed by the very heal meant to preserve it. The verb does the frame removal, the `reconcileNeeded` write and the active-pointer move in **one** state object and one write.
   </Step>
   <Step title="Restore the paused epic to active">
-    Set the paused epic's `status` back to `active` and call `set-active <paused-id>`.
+    `pop-detour` already did this — it resumes the paused epic and moves the active pointer in the same write that removes the frame. Nothing here sets a `status` by hand; `set-active <paused-id>` is only needed if the pointer was moved elsewhere in between.
   </Step>
   <Step title="Run the reconcile gate">
     If `reconcileOnResume` was `true`, the reconcile gate fires now. A fresh-context review re-reads the paused proposal and diffs what the detour actually shipped. Do not write code until the gate clears. See [The Reconcile Gate](/concepts/reconcile-gate) for the full flow.
