@@ -55,7 +55,7 @@ Either way, the `record-reconcile` call is required — even for a `valid` verdi
 
 ## The gate guard
 
-The gate guard is a `PreToolUse` hook that mechanically blocks `Edit`, `Write`, and `NotebookEdit` while the active epic has `reconcileNeeded: true`. It is:
+The gate guard is a `PreToolUse` hook that mechanically blocks `Edit`, `Write`, and `NotebookEdit` — and, on a `Bash` call, a member of a closed, documented list of write shapes (0.46.0) — while the active epic has `reconcileNeeded: true`. It is:
 
 - **On by default** — no configuration required.
 - **Unconditional** — it fires regardless of the repo's `gateGuard` setting. `set-gate-guard off` no longer bypasses this specific check; that flag is reserved for any future generalization of the hook mechanism.
