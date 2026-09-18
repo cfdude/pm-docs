@@ -4,21 +4,25 @@ sidebarTitle: "/pm:gate-guard"
 description: "A PreToolUse hook that blocks writes while the active epic owes a reconcile. Always on for that case — running set-gate-guard off will not bypass it."
 ---
 
-The gate guard is PM's safety mechanism for the highest-stakes skip: writing source code before a reconcile gate has run. It is a `PreToolUse` hook that intercepts every `Edit`, `Write`, and `NotebookEdit` call and blocks them while the active epic has `reconcileNeeded: true`. This is the one place PM tolerates mechanical blocking over pure instruction — protecting you from overwriting work before a detour is properly reconciled.
+The gate guard is PM's safety mechanism for the highest-stakes skip: writing source code before a reconcile gate has run. It is a `PreToolUse` hook that intercepts every `Edit`, `Write`, and `NotebookEdit` call — and a `Bash` call whose command text matches one of a closed, documented list of write shapes — and blocks them while the active epic has `reconcileNeeded: true`. This is the one place PM tolerates mechanical blocking over pure instruction: it protects the single highest-stakes skip, writing source before the reconcile gate actually runs.
 
 ## How it works
 
-Every `Edit`, `Write`, and `NotebookEdit` call is intercepted by the hook. Before allowing the tool call to proceed, PM checks whether the currently active epic has `reconcileNeeded: true` — meaning the epic popped out of a detour and still owes a reconcile gate.
+Every `Edit`, `Write`, and `NotebookEdit` call is intercepted, and so is every `Bash` call whose command text resolves to one of the write shapes below. Before allowing the call to proceed, PM checks whether the currently active epic has `reconcileNeeded: true` — meaning the epic popped out of a detour and still owes a reconcile gate.
 
-- If `reconcileNeeded` is `true`: the tool call is **blocked** with a message directing you to run the reconciler agent via `/pm:resume`.
+- If `reconcileNeeded` is `true`: the tool call is **blocked**, with a message pointing you at the reconciler agent and naming the shape it matched when it matched one. Run the reconcile gate first.
 - If `reconcileNeeded` is `false` or absent: the tool call proceeds normally. Epics with no pending reconcile are completely unaffected.
-- **If the active epic has been archived, nothing is blocked** (0.31.0). `state.active` can legitimately name an archived epic for a stretch — the pointer is cleared on write paths like `render`, `sync` and `commit-nudge`, and this hook is read-only, so it can observe the window between. An epic that has ended owes no obligation, and a stale `reconcileNeeded` on one used to wedge writes with no CLI way out, since the block below is deliberately unreachable by `set-gate-guard off`. The filter sits at the point the pointer is resolved, so any future obligation added here inherits it.
+- **If the active epic has been archived, nothing is blocked** (0.31.0). `state.active` can legitimately name an archived epic for a stretch — the pointer is cleared on write paths like `render`, `sync` and `commit-nudge`, and this hook is read-only, so it can observe the window between. An epic that has ended owes no obligation, and a stale `reconcileNeeded` on one used to wedge writes with no CLI way out, since the block below is deliberately unreachable by `set-gate-guard off`.
+
+## The matcher is `Bash|Edit|Write|NotebookEdit` (0.46.0)
+
+Through 0.45.0 the hook was registered for `Edit|Write|NotebookEdit` only, which made it one hop from useless: an agent blocked on `Edit` wrote the same file with `cat > f <<EOF`, `sed -i`, or `tee`, and the gate it exists to protect was skipped in one hop. The matcher now includes `Bash`, and for a `Bash` call the guard blocks only a member of the closed list below and passes everything else. What that added coverage can and cannot decide is set out under [The Bash write shapes](#the-bash-write-shapes--a-closed-list-and-what-it-cannot-see).
 
 ## Always on for reconcile-owed epics
 
 This check is **always active** for any epic carrying `reconcileNeeded: true` — including epics that already had the flag set before this behavior was introduced. It previously required an explicit `set-gate-guard on`; real-usage feedback showed that opt-in was never actually turned on across several sessions where it would have caught a real skip, so the default was flipped.
 
-**There is no bypass for this case.** Running `set-gate-guard off` does **not** silence the reconcile-owed block. The only path through it is completing the reconcile gate: run `/pm:resume`, let the reconciler agent complete the reconcile gate, and the block clears once `record-reconcile` has answered every detour the epic was paused for with `--reconcile`. Once cleared, file writes proceed as normal.
+**There is no bypass for this case.** Running `set-gate-guard off` does **not** silence the reconcile-owed block, Bash included. Any switch that silenced Bash writes while a reconcile is owed would be a bypass for the whole gate — an agent that learns it exists routes around the gate in one command. The only path through is completing the reconcile gate: run `/pm:resume`, let the reconciler agent complete the reconcile gate, and the block clears once `record-reconcile` has answered every detour the epic was paused for with `--reconcile`. Once cleared, file writes proceed as normal.
 
 **Nor can an ordinary verb erase the obligation (0.44.0).** Through 0.43.0 the render heal cleared `reconcileNeeded` on any epic that was archived or was not the active epic, so `clear-active`, `set-active <other>`, or archive-then-unarchive silently switched this block off, and a verdict against the wrong detour cleared it too. Now the obligation is recorded per detour on the paused epic's `may-invalidate` link and survives all of those: moving the active pointer off an owing epic prints a warning naming the detours owed, and the block returns when the epic is active again. `record-reconcile` accepts a verdict only against an armed detour whose frame has been popped.
 
@@ -27,6 +31,48 @@ This check is **always active** for any epic carrying `reconcileNeeded: true` �
 ```text
 conductor: cleared the reconcile obligation on 'q' — it holds no may-invalidate link a verdict could be recorded against and no detour frame pausing it, so no record-reconcile could ever be accepted and it would have blocked the epic permanently
 ```
+
+## The Bash write shapes — a closed list, and what it cannot see
+
+The guard reads `tool_name` from the hook payload. Only an **affirmatively-identified** `Bash` call takes the shape path; anything else — `Edit`, an unknown tool name, an unparseable payload, an absent payload, or a `Bash` payload carrying no readable command — takes the ordinary blocking path unchanged. That direction is deliberate: defaulting an unidentifiable call to the allow path would be a silent hole in the one unconditional block PM ships.
+
+The list is **closed**, and each row matches a FIXED label the block message prints — never the matched path or any slice of the command, so the message interpolates no text the engine did not write. It blocks:
+
+| Shape | Label |
+| --- | --- |
+| a redirection into a file — `>`, `>>`, `&>`, `&>>`, `>\|` or `>&`, optionally preceded by fd digits, with a path target | `a redirection into a file` |
+| a segment-leading `sed` / `gsed` / `perl` / `ruby` carrying `-i…` or `--in-place[=…]` | `an in-place stream editor` |
+| a segment-leading `tee` with a non-device argument | `tee` |
+| a segment-leading `cp`, `mv`, `install`, `rsync`, `dd`, `truncate`, `patch` | that command's name |
+| a segment-leading `git apply` | `git apply` |
+| removing the conductor record with `rm`, `unlink` or `shred` — or `git rm`/`git mv` — where the written argument names the record itself | `a write to the conductor record` |
+
+**Destroying the record is on the list**, because it is not a smaller evasion than writing over a file: the guard is dormant while no record exists, so `rm .conductor/state.json` turns the whole block OFF, and the call after it passes. **The record match is on the exact path, and that is what keeps PM's own remedies runnable.** It matches `.conductor`, `.conductor/state.json`, a `/*` glob of the directory, and a trailing `*` on either name (`.conductor/state.json*`, `.conductor*`) at any directory prefix, with one surrounding quote stripped from each end. It is **never a longer literal filename beneath it**, so `rm .conductor/state.json.lock` — the remedy the engine's own lock refusal prints, as the literal path — stays runnable, and the lock-only glob `.conductor/state.json.*` (which cannot expand to the record) stays the runnable spelling for lock cleanup. `state.json*` IS blocked even though it would also reach the lock, and that costs nothing because PM prints the literal lock path, never a glob.
+
+**Git is read through its subcommand.** `git rm -f .conductor/state.json` destroys the record exactly as `rm` does, so a git invocation has its global options skipped first and its subcommand read. Six globals each take a separate value word — `-C`, `-c`, `--git-dir`, `--work-tree`, `--namespace` and `--exec-path`, in both the separate and the glued spelling — and every other flag-shaped word consumes itself alone, so **`git -p rm <record>` is not read as `rm` being `-p`'s value.** The subcommand's OWN arguments are what the record pattern reads, never git's globals, so `git -C .conductor status` (a read) passes, and the reader also repairs `git -C <path> apply p.patch`, this project's own mandated spelling. Its bound, named rather than left to be found: `git -C /repo/.conductor rm state.json` passes, because `state.json` alone is not the record's path.
+
+**An invocation of PM's own engine is never a command-word write shape.** A `node`-led segment whose first argument is a path ending `conductor.mjs` or an unexpanded variable reference (`node "$ENGINE" <verb>` — the spelling PM's own command docs emit), followed by a verb, is exempt from the command-word rows. That is what keeps the commands the gate names as its own exit — and the detour stack's `drop-detour` — reachable as the list grows. The bound is exact: the exemption covers the command-word arm ONLY. **A redirection in the same segment still blocks** (`node … conductor.mjs status > out.txt`), because an exemption that swallowed redirections would make "prefix the command with an engine invocation" a one-line bypass. And no row is reachable from a `node`-led segment today anyway — the command-word arm reads the segment's leading word, always the runtime — so the exemption is a forward commitment, not a behaviour you can observe.
+
+**Segments are split on newline, `;`, `&&`, `||` and `|`** (except the `>|` no-clobber operator), and the scan runs per segment, so a write shape after a `&&` is caught. The command word is taken after its last `/`, and a leading `VAR=value`, `sudo`, `env` or `command` is skipped.
+
+### The two fail-open modes, stated plainly
+
+- **An unreadable record allows every Bash call CARRYING A COMMAND.** This is a carve-out, not a gap: one remedy the unreadable-state message prints redirects into the record itself and would otherwise match the shape list.
+- **An absent record leaves the guard dormant.** With no `.conductor/state.json` the hook exits 0 silently for every tool. That is the plugin's standing dormancy contract, and it is exactly why destroying the record is a shape.
+
+### What it CANNOT see
+
+A path built from a variable or `$(…)`; anything behind `eval`; a script or Makefile target invoked by name; an interpreter given inline source (`python -c`, `node -e`); a program that writes files of its own accord; an in-place editor reached through another command's arguments (`find … -exec sed -i …`, `xargs … sed -i`). It has no quoting model either, so a `>` inside a quoted string or a heredoc body reads as a redirection. The check is **incomplete by construction, and the docs say so** — every form it cannot decide stays where PM's law puts it, in the instruction the block message carries.
+
+**Accepted false positives.** A redirect to a non-source file (`node --test > red-1.txt`, `cmd > /tmp/scratch`) is blocked: the guard has no path policy, and the window is short because running the gate is the correct next action anyway. A **spaced comparison** still blocks — `awk '$1 > 5' f.txt`, `jq 'select(.n > 3)'`, `rg -n 'a > b' .`, `git commit -m "fix: a > b"` — and that is accepted under the no-quoting-model non-goal. The **arrow** case is _not_ a false positive and is excluded deliberately, because this project mandates `rg`: a `>` whose immediately preceding character is `-` does not match, so `rg 'foo->bar' src/` and `git log --format='%h -> %s'` pass.
+
+## Opt-OUT for the tracker-refresh case
+
+A second check rides the same hook and behaves the opposite way: when the active epic owes a **tracker refresh** (it is linked to an external item and became active without that item being re-read), the editing tools are blocked **only while `set-gate-guard on`**. Turning the guard off silences this one and leaves the reconcile block above untouched.
+
+The escape hatch is deliberate and not optional. An agent that is offline, unauthenticated, or facing a deleted upstream item has to be able to proceed honestly — a `--verdict unchanged` recorded blind is a worse outcome than a bypass someone can see. Clear the obligation properly with `record-tracker-refresh <id> --verdict unchanged|material-change --external-updated-at <iso>`.
+
+Both halves are stated together so the asymmetry is a decision on the record rather than an inconsistency someone later "fixes": **the reconcile arm has no inverse, the tracker arm keeps one.**
 
 ## The `set-gate-guard` command
 
@@ -64,6 +110,8 @@ GATE GUARD — on.
 
 The reader lives on the **toggle**, deliberately not on the `gate-guard` verb. That verb is the hook itself: it blocks by writing to stderr and exiting 2, and it **allows by returning silently** — so its stdout is protocol surface, and a human-readable report printed there would corrupt it. Silence from `gate-guard` is the allow signal, not a broken command.
 
+**`on` alone does not mean anything is currently blocked.** The guard also needs a live, non-archived active epic that owes one of the two obligations. The blocked line is computed from the active epic, so it reports `BLOCKING NOW: '<id>' owes a reconcile` even while the flag reads `off`, matching the unconditional reconcile case above. Reading `gateGuard: true` plus a silent hook and concluding the guard was broken is exactly the inference this removes.
+
 ## The command line (0.44.0)
 
 **A help token never toggles the guard.** `set-gate-guard off --help` prints `set-gate-guard`'s help, exits 0 and leaves the guard as it was; from 0.41.0 through 0.43.0 it exited 0 having set `gateGuard: false`. The same holds for `-h`, and for a help token anywhere after the verb.
@@ -79,13 +127,13 @@ conductor: unknown flag --bogus for gate-guard — it accepts: --platform
 Nothing was written.
 ```
 
-Claude Code treats exit 1 as a non-blocking hook error: the error is shown and the tool call proceeds **unguarded**. Exit 2 would block every `Edit`/`Write`/`NotebookEdit` in every session until the plugin was fixed, which is the worse failure. Within one plugin version this needs pm's own `hooks/hooks.json` to disagree with its own engine, and the test suite asserts every hook line in that file passes the check. Two ways remain: a hook line edited by hand, and an installed plugin's `hooks.json` driving a checkout engine of a different version under `PM_ENGINE_DELEGATION`. So **do not hand-edit `hooks/hooks.json`**; if the guard's hook errors on every tool call, update the plugin so its hook file and engine match. In a repository without pm the hook verbs refuse nothing and stay silent, as they always have.
+Claude Code treats exit 1 as a non-blocking hook error: the error is shown and the tool call proceeds **unguarded**. Exit 2 would block every `Edit`/`Write`/`NotebookEdit` in every session until the plugin was fixed, which is the worse failure. Within one plugin version this needs PM's own `hooks/hooks.json` to disagree with its own engine, and the test suite asserts every hook line in that file passes the check. Two ways remain: a hook line edited by hand, and an installed plugin's `hooks.json` driving a checkout engine of a different version under `PM_ENGINE_DELEGATION`. So **do not hand-edit `hooks/hooks.json`**; if the guard's hook errors on every tool call, update the plugin so its hook file and engine match. In a repository without PM the hook verbs refuse nothing and stay silent, as they always have.
 
-That is the opposite polarity from an unreadable `state.json`, which fails **closed** with exit 2 (below). The difference is what cannot be read: a refused command line is pm's own hook file out of step with its engine, while an unreadable state file means whether a reconcile is owed is unknown.
+That is the opposite polarity from an unreadable `state.json`, which fails **closed** with exit 2 (below). The difference is what cannot be read: a refused command line is PM's own hook file out of step with its engine, while an unreadable state file means whether a reconcile is owed is unknown.
 
 ## An unreadable `state.json` blocks — fails CLOSED (0.44.0)
 
-If `.conductor/state.json` exists but cannot be read — a merge left conflict markers in it, it is truncated, or its shape is wrong (not a JSON object, `epics` present and not an array or holding a non-object, `detourStack` present and not an array) — the guard **blocks every `Edit`/`Write`/`NotebookEdit` with exit 2** until the file is fixed. Before this, the same file with a conflict marker prepended exited 0 and silently disabled the unconditional reconcile block, exactly when the record saying whether one is owed could not be read; with `epics: {}` the hook crashed with a `TypeError` (exit 1, which Claude Code also treats as allow).
+If `.conductor/state.json` exists but cannot be read — a merge left conflict markers in it, it is truncated, or its shape is wrong (not a JSON object, `epics` present and not an array or holding a non-object, `detourStack` present and not an array) — the guard **blocks every `Edit`/`Write`/`NotebookEdit` and every Bash write shape with exit 2** until the file is fixed — **with one carve-out that keeps the remedies below runnable**: an affirmed `Bash` call carrying command text is ALLOWED whatever its shape, because one of the remedies the message prints redirects into the record itself (`git show <rev>:.conductor/state.json > .conductor/state.json`) and another is a `mv` of it, so a shape check here would block the escape hatch the message hands you. A `Bash` payload with NO readable command does not inherit it and blocks; there is nothing to decide from, and every remedy named is a command. Before this, the same file with a conflict marker prepended exited 0 and silently disabled the unconditional reconcile block, exactly when the record saying whether one is owed could not be read; with `epics: {}` the hook crashed with a `TypeError` (exit 1, which Claude Code also treats as allow).
 
 The hook's output with a conflict marker at the top of the file:
 
@@ -100,7 +148,7 @@ conductor: .conductor/state.json cannot be read — it does not parse as JSON (U
   gate guard: Edit/Write/NotebookEdit stay blocked until the file is fixed — whether a reconcile is owed cannot be read. Bash is not blocked: run one of the commands above.
 ```
 
-**This is not a wedge, because Bash never reaches this hook.** The engine refuses on an unreadable file whatever tool the payload names; what keeps Bash open is `hooks/hooks.json`, which registers `gate-guard` for the matcher `Edit|Write|NotebookEdit` only. Every remedy the message names is a shell command, so fix the file from Bash:
+**This is not a wedge, and the reason is the carve-out, not the matcher (0.46.0).** Through 0.45.0 what kept Bash open was `hooks/hooks.json`, which registered `gate-guard` for `Edit|Write|NotebookEdit` only. Under the widened matcher that is no longer true, and wedge-freedom rests instead on the exemption above — an affirmed Bash call carrying a command is allowed even over an unreadable record. Every remedy the message names is a shell command, so fix the file from Bash:
 
 - a merge left conflict markers → `git checkout --ours .conductor/state.json` (or `--theirs`);
 - the markers were committed → `git show <good-rev>:.conductor/state.json > .conductor/state.json`;
@@ -109,12 +157,10 @@ conductor: .conductor/state.json cannot be read — it does not parse as JSON (U
 
 Do not allow an Edit/Write aimed at `state.json` itself as a way out — that was considered and declined: it would widen the one unconditional block with a path match on tool input, and every remedy above is already reachable through Bash. An ABSENT `state.json` is still dormancy: the hook exits 0 silently in a repo that has not run `/pm:init`.
 
-It states the value **and what it cannot tell you**, because the non-obvious limit is the one a reader gets wrong: `on` alone does not mean anything is currently blocked. The guard also needs a live, non-archived active epic that owes one of the two obligations.
-
 <Warning>
-  If you see "blocked by gate guard" on an `Edit` or `Write` call, the only resolution is to run `/pm:resume` and complete the reconcile gate. There is no workaround — `set-gate-guard off` will not help here.
+  If you see "blocked by gate guard" on an `Edit`, `Write`, `NotebookEdit`, or `Bash` call, the resolution is to run `/pm:resume` and complete the reconcile gate. `set-gate-guard off` will not help here.
 </Warning>
 
 <Note>
-  The gate guard hook is dormant until `/pm:init` has been run in a project. It activates only in projects that have been initialized and have a `.conductor/state.json` present.
+  The gate guard hook is dormant until `/pm:init` has been run in a project. It activates only in projects that have been initialized and have a `.conductor/state.json` present — and an absent or unreadable record is one of the two fail-open modes documented above.
 </Note>
