@@ -61,7 +61,7 @@ The gate guard is a `PreToolUse` hook that mechanically blocks `Edit`, `Write`, 
 - **Unconditional** — it fires regardless of the repo's `gateGuard` setting. `set-gate-guard off` no longer bypasses this specific check; that flag is reserved for any future generalization of the hook mechanism.
 - **The only path past it** — run the reconcile gate and call `record-reconcile`. There is no override flag.
 - **Not erasable by an ordinary verb** (0.44.0) — `clear-active`, `set-active <other>` and archive-then-unarchive all leave the obligation owed (moving the active pointer off an owing epic warns), and `update-epic <epic> --clear-links` and `remove-epic <detour>` are refused while it stands. The render heal clears it only where nothing could ever answer it (no frame, no armed or pre-0.44.0 `may-invalidate` link), and says so on stderr.
-- **Closed when state cannot be read** (0.44.0) — while `.conductor/state.json` exists but cannot be read, the hook blocks `Edit`/`Write`/`NotebookEdit` too, because whether a reconcile is owed is then unknown. Bash is not matched, so the git remedies stay runnable; see `/pm:gate-guard`.
+- **Closed when state cannot be read** (0.44.0) — while `.conductor/state.json` exists but cannot be read, the hook blocks `Edit`/`Write`/`NotebookEdit` and every Bash write shape too, because whether a reconcile is owed is then unknown — with a carve-out that an affirmed `Bash` call carrying a command is allowed whatever its shape, so the git remedies stay runnable; see `/pm:gate-guard`.
 
 This means the gate guard is a genuine enforcement mechanism, not a reminder. An agent mid-task cannot accidentally start writing code on a stale plan because a hook blocks the write at the tool level before any edit reaches the filesystem.
 

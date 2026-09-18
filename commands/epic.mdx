@@ -237,6 +237,14 @@ conductor.mjs update-epic <id> --status archived \
 
 `--no-deferrals` is the explicit "there are none" and is a claim, not a default — swap it for `--deferral "<epicId>:<section>"` where work is now held by a registered epic, or `--declined-deferral "<what>::<why not>"` where you are deliberately not doing it. The engine does not read your artifacts and will not guess.
 
+**A reference a disposition stores must name a real, OTHER epic (0.46.0).** `--carried-to` and the EPIC half of each `--deferral` are validated BEFORE the archive gate decides, and each refuses — writing nothing, and naming which id — when it is:
+
+- **empty** — an assertion that claims a reference and then declines to say what it points at is not the sayable form of "there are none";
+- **unknown** — no epic in the record carries that id, so the work would be recorded as handed to nothing;
+- **the archiving epic itself** — an epic cannot hand work to itself. The self-reference previously SATISFIED the handoff obligation while conveying nothing, which is exactly what that gate exists to stop.
+
+It binds wherever the reference is SUPPLIED, not only where the handoff is demanded: a receiver named alongside `--outcome killed` is still a claim about where work went, and a false one is no less false for the company it keeps. The `--deferral` ARTIFACT-SECTION half may be empty and stays that way; `--declined-deferral`'s `<what>` is free text and never an epic id, so none of this reaches it. `integrity` reports the two shapes a write-time refusal cannot reach — a self-reference and an empty id already on disk.
+
 **The disposition flags are recorded only inside an archive (0.44.0).** `--outcome`, `--reason` and `--carried-to` supplied without `--status archived` were dropped while the command reported that every supplied value was already held — false, and the epic carried no disposition. They now share the deferral flags' refusal, before anything is loaded or written; `--correct-disposition` keeps its own. Real output, on an unarchived epic:
 
 ```text
@@ -432,6 +440,24 @@ conductor.mjs set-autonomy <id> \
 - **`--notify`** — Records a WARN-class decision durably alongside the autonomy grant. Repeatable.
 
 All of `--preauthorize`, `--context`, and `--notify` are **additive** — re-running `set-autonomy` on the same epic appends to the existing entries and never clobbers them. Only `--level` replaces.
+
+### Taking a grant back — `--revoke` (0.46.0)
+
+`--preauthorize` shipped with no inverse: grants accumulated, and turning autonomy off left every one intact so that turning it back on silently restored them all. `--revoke` is that inverse.
+
+```bash
+conductor.mjs set-autonomy <id> \
+  --revoke "drop-scratch-table" --revoke-reason "<why it is no longer safe>"
+# or a whole category, mirroring the grant syntax:
+conductor.mjs set-autonomy <id> --revoke "category:filesystem" --revoke-reason "<why>"
+```
+
+- **`--revoke "<action>"`** / **`--revoke "category:<name>"`** — Takes a grant back. The inverse `--preauthorize` never had. Repeatable.
+- **`--revoke-reason "<why>"`** — Required by `--revoke`; refused on its own.
+
+**A revoke RECORDS rather than deletes.** The grant stays readable carrying its revocation and its required reason, matching `--withdraw-gate-review` and `linkOnce`'s `superseded` — so "authorised and then taken back" is distinguishable from "never authorised". A revoked grant is never honoured and never restored. `--revoke` names the STORED value after the same first-colon split `--preauthorize` applies, so whatever a grant stored is exactly what revokes it; it refuses, writing nothing, for an empty action, for an action the epic does not hold, and when every matching grant is already revoked. A revoke marks only the UNREVOKED matches — re-granting is the documented un-revoke, so an epic can legitimately hold a revoked and a live entry for the same action at once.
+
+**`--level off` does not clear grants**, and that is deliberate: deletion is not the inverse of granting, and an epic taken off autonomy for an afternoon has not withdrawn anybody's judgment about which actions were safe. The measured harm was never that grants survive — it was that re-arming restored them SILENTLY. So **`--level autonomous` now reports the count and identity of the live grants it arms**, and says so explicitly when there are none. A revoked grant is not restored by re-arming and does not appear in that report — which is why the hierarchy executor's decision rule reads "already covered by a live pre-authorized grant" as satisfied by no revoked grant and by no grant that names nothing.
 
 ## Recording a gate verdict
 

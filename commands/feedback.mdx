@@ -71,6 +71,8 @@ This is a pure agent-driven workflow. **The PM engine (`conductor.mjs`) is never
 
 **On every path the report is written to `.conductor/feedback/` first**, so it survives regardless of which channel is available — and regardless of whether you send it at all.
 
+**If the active epic owes a reconcile, this local write is blocked (0.46.0)** — by the gate guard's `Edit`/`Write` and its Bash write shapes alike — so `/pm:feedback` cannot complete this step until the reconcile gate runs. That is the way through: complete the gate, then file the report. The window is short, and this is named rather than left to be discovered so a user who hits it does not conclude the command is broken.
+
 <Note>
   **`/pm:sync` is handled differently on purpose.** Listing open issues is a _read_ with no credential-free substitute — a prefilled URL cannot enumerate anything. So the inward sync procedure gets a preflight that **stops and says so** rather than reporting a sync nobody performed. Filing degrades to another channel; reading cannot, and pretending otherwise would be worse than the missing dependency.
 </Note>
