@@ -55,12 +55,12 @@ These aren't benchmarks — they're real figures pulled mechanically from PM's o
 
 | Metric | Value |
 | --- | --- |
-| Releases shipped end-to-end (spec → build → test → changelog → release) | **64** |
-| Tests in the engine | **2,476** |
-| Lines of engine code (`scripts/conductor.mjs` + `scripts/lib/*.mjs`) | **19,648** |
+| Releases shipped end-to-end (spec → build → test → changelog → release) | **65** |
+| Tests in the engine | **2,519** |
+| Lines of engine code (`scripts/conductor.mjs` + `scripts/lib/*.mjs`) | **19,715** |
 | External dependencies | **0** |
 
-Every multi-agent hierarchy dispatch runs worktree-isolated and converges back through sequential merge — every conflict seen so far has been mechanical (a shared CHANGELOG header, a usage string), never a real logic collision. The engine is Node 18\+ built-ins only.
+Every multi-agent hierarchy dispatch runs worktree-isolated and converges back through sequential merge — every conflict seen so far has been mechanical (a shared CHANGELOG header, a usage string), never a real logic collision. The engine is Node 22\+ built-ins only.
 
 <Tip>
   PM manages its own development — the backlog, roadmap, and every release of PM itself run through PM. The `PROJECT.md` in the `cfdude/pm` repo is a live example of what PM produces.

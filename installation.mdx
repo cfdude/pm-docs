@@ -1,15 +1,15 @@
 ---
 title: "Install the PM Project Management Plugin for Claude Code"
 sidebarTitle: "Installation"
-description: "Install the PM project-management plugin from the cfdude-plugins marketplace. Requires Node 18+ and Claude Code. No npm install needed."
+description: "Install the PM project-management plugin from the cfdude-plugins marketplace. Requires Node 22+ and Claude Code. No npm install needed."
 ---
 
-PM is distributed via the `cfdude-plugins` marketplace and requires no `npm install` — the engine is zero-dependency by hard rule. The whole engine (`scripts/conductor.mjs` plus `scripts/lib/*.mjs`) is 19,648 lines of Node 18\+ built-ins, so there is nothing to install beyond the plugin itself. Add the marketplace, install the plugin, and you're ready to initialize your first project.
+PM is distributed via the `cfdude-plugins` marketplace and requires no `npm install` — the engine is zero-dependency by hard rule. The whole engine (`scripts/conductor.mjs` plus `scripts/lib/*.mjs`) is 19,715 lines of Node 22\+ built-ins, so there is nothing to install beyond the plugin itself. Add the marketplace, install the plugin, and you're ready to initialize your first project.
 
 ## Prerequisites
 
 <Info>
-  **Node 18\+** is required to run the conductor engine. If you're already using OpenSpec or Superpowers, Node 18\+ is almost certainly present. **Claude Code** is the only supported platform today — Codex, Gemini CLI, and other platforms are on the roadmap.
+  **Node 22\+** is required to run the conductor engine — pm supports the oldest Node LTS line that is not end-of-life, which is 22 today. If the Node running pm is below that, the `SessionStart` briefing warns in one line (a warning, never a refusal). **Claude Code** is the only supported platform today — Codex, Gemini CLI, and other platforms are on the roadmap.
 </Info>
 
 ## Installation steps
