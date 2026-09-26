@@ -45,7 +45,7 @@ A typical working day with PM follows a clear rhythm:
 
 `/pm:status` re-renders the briefing on demand. What you see:
 
-- **Active epic** — the currently in-flight epic, its lane (e.g. `openspec`, `superpowers`, `claude-code`), and live story progress read directly from checkbox state in `tasks.md` or your plan file
+- **Active epic** — the currently in-flight epic, its lane (e.g. `openspec`, `superpowers`, `claude-code`), and live progress: its inline stories and the checkbox state in `tasks.md` or your plan file, counted together (0.50.0) — an archived change is read from its archived `tasks.md`
 - **Detour stack** — every paused frame in order, with a `⚠ reconcile-on-resume` warning on any frame whose detour touched code the paused epic depends on
 - **Next-up queue** — the highest-priority `queued` epics sorted P0 → P3, with `depends-on` blockers named inline
 - **Per-lane counts** — how many epics are active, queued, or paused in each lane

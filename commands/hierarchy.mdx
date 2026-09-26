@@ -91,3 +91,5 @@ conductor.mjs verify-worktrees
 ```
 
 This cross-references `git worktree list` against epic status and flags any `hierarchy-child/*` worktree whose epic is already archived but was not cleaned up. Once a child's branch has merged, remove its worktree and delete its branch immediately — never leave them dangling.
+
+It reads `git worktree list --porcelain -z`, the NUL-terminated listing, which **needs git 2.36 or later** (0.50.0), so a worktree path holding a line feed is reported whole instead of truncated at the break. Outside a git repository it prints `"orphaned": []`; any other failure to list worktrees — an older git, dubious ownership, a corrupt repository, git missing from PATH — is refused with git's own message instead of the empty list a clean repository prints.

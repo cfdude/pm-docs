@@ -64,6 +64,9 @@
             "pages": [
               "commands/init",
               "commands/status",
+              "commands/verify-state",
+              "commands/verify-worktrees",
+              "commands/verify-specs",
               "commands/next",
               "commands/sync",
               "commands/triage",

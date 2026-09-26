@@ -11,6 +11,8 @@ conductor.mjs activity [--since <when>] [--epic <id>] [--json]
 conductor.mjs purge-logs --kind <k> [--keep N] [--over <size>] [--older-than <when>] [--dry-run] --yes
 ```
 
+`--epic <id>` keeps the events whose `epic` is `<id>` **or whose `detour` is `<id>`** (0.50.0). A detour event is about two epics, the one paused (`epic`) and the one it was paused for (`detour`), so `--epic <detour-id>` shows the push that started that detour's work. Before 0.50.0 every detour event recorded `epic: null`, so the per-epic DETOURS list was always empty and `--epic` left out every detour.
+
 ## Why it ships with a reader, and would not ship without one
 
 A log nobody reads is a data graveyard — and that argument has been used in this project to **decline** things, so it could not be waved away here. The reader landed in the same change as the writer.
@@ -23,6 +25,7 @@ It answers questions that were previously archaeology:
 | How often is work detoured, and off which epics? | count rows in a log by hand |
 | How is work distributed across lanes, and what got re-routed? | not answerable |
 | In what order did gate verdicts actually land — or get withdrawn (`gate-withdrawn`, 0.43.0)? | reconstruct from timestamps |
+| What was re-prioritised, granted or revoked autonomy, or given a different review mode — and when? (**SETTINGS**, 0.50.0) | not answerable — each was a bare `state-write` |
 | **Were there writes the conductor did not make?** | **a `jq` sweep across every repo** |
 
 That last row is the one that earns its cost. A **hand-edit** of the state file shows up as a revision no recorded event accounts for — the failure mode this project has repeatedly found and repeatedly had to dig for.
@@ -30,6 +33,18 @@ That last row is the one that earns its cost. A **hand-edit** of the state file 
 <Note>
   **The detail that makes that section signal rather than noise:** events carry a revision _range_, not a single number. An ordinary update writes twice — once for the change, once for the re-render — so single-number events would flag every normal write as an out-of-band one, and the section would be pure noise on day one.
 </Note>
+
+**Named events (0.50.0).** Reconcile verdicts, autonomy changes, priority changes and review-mode changes used to be logged as a bare `state-write` with no epic. Each is now a named event:
+
+| Event | Written by | Where the report shows it |
+| --- | --- | --- |
+| `reconcile-recorded` | `record-reconcile` | **GATES**, as `reconcile vs <detour>=<verdict>`, marked `(correction)` when it replaces an earlier verdict |
+| `epic-autonomy` | `set-autonomy` — the level change and counts of grants added, grants revoked and notifications | **SETTINGS** |
+| `epic-priority` | a priority change | **SETTINGS** |
+| `review-mode` | `set-review-mode` and `update-epic --review-mode` | **SETTINGS** |
+| `detour-drop` | `drop-detour` — no longer logged as a pop; names the frame actually dropped, even one buried under another | **DETOURS** |
+
+The DETOURS line reads `N push(es), N pop(s), N drop(s)`, and the per-epic figure counts interruptions: one per `push-detour`, where the pop used to be counted as a second. TIME TO PICKUP starts at an epic's first work event; a detour, reconcile, priority, autonomy or review-mode event alone does not start it. `activity --epic` shows the epic-scoped settings events too.
 
 ## Bounded by design
 

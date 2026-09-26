@@ -101,6 +101,8 @@ node "$ENGINE" verify-worktrees
 
 This cross-references `git worktree list` against epic status and flags any `hierarchy-child/*` worktree whose epic is already archived but was not cleaned up. Clean worktrees immediately after each child merges — never leave them dangling.
 
+It reads `git worktree list --porcelain -z`, the NUL-terminated listing, which **needs git 2.36 or later** (0.50.0), so a worktree path holding a line feed is reported whole instead of truncated at the break. Outside a git repository it prints `"orphaned": []`; any other failure to list worktrees — an older git, dubious ownership, a corrupt repository, git missing from PATH — is refused with git's own message instead of the empty list a clean repository prints.
+
 <Note>
   `plan-hierarchy` is a pure read — it recomputes the execution plan fresh from `parent`, `priority`, `links[]`, and `autonomy` every time you run it. There is no "hierarchy in progress" flag that can get out of sync. Re-running it at any point reflects current reality.
 </Note>
