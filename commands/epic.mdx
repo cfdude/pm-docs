@@ -23,11 +23,11 @@ conductor.mjs add-epic \
 - **`--id`** — Unique identifier in kebab-case (e.g. `auth-service-refresh`). Must be unique across all epics in the project.
 - **`--title`** — Human-readable name for the epic (quoted string).
 - **`--lane`** — One of `openspec | superpowers | claude-code | decision | external`. Routes the epic to the correct workflow.
-- **`--priority`** — One of `P0` (critical), `P1` (high), `P2` (medium), `P3` (low), or `P?` (untriaged). Determines ordering in the NEXT UP queue.
+- **`--priority`** — One of `P0` (critical), `P1` (high), `P2` (medium), `P3` (low), or `P?` (untriaged). Determines ordering in the NEXT UP queue. Anything else is refused by name and nothing is written (0.50.0) — `--priority banana` used to be stored as a band of its own that ranked last. A record an older engine wrote with another value still loads.
 - **`--status`** — Defaults to `queued`. Use `planned` for roadmap items you intend to do but haven't proposed or scaffolded yet — `planned` epics appear in `PROJECT.md` but are excluded from NEXT UP.
 - **`--parent`** — Nests this epic under an existing parent. The parent must already exist, an epic may not be its own parent, and the link may not form a cycle.
 - **`--external-id`** — Links the epic to an issue key in a configured external tracker (e.g. `JOB-506`). See `/pm:tracker`.
-- **`--external-url`** — Full URL to the corresponding issue in the external tracker.
+- **`--external-url`** — Full URL to the corresponding issue in the external tracker. **One tracker item maps to one epic** (0.50.0): a URL another epic already holds — archived ones included — is refused, naming that epic and its status. With no URL on either side, the bare `--external-id` is the key. The URL is compared exactly after trimming surrounding whitespace, so record the tracker's canonical URL.
 - **`--plan`** — Repo-relative path to a markdown plan file. Used as the progress source for `superpowers`-lane epics, and the association `sync` dedups on.
 - **`--spec`** — Repo-relative path to the **design document this epic came from** (0.32.0). Provenance, not a progress source: nothing is counted from it. Many epics may name one document — that is the point, since a design usually implies more than one piece of work — and `verify-specs` reports which documents have no epics drawn from them.
 - **`--link`** — Validated, not just parsed: the referenced epic id must already exist, the value must split into at least `type` and `epic`, and **the type must be one of the known set** (0.34.0). The flag is repeatable.
@@ -85,7 +85,7 @@ Every engine verb on this page is held to one pre-dispatch check, which runs bef
 - **An undeclared flag is refused by name**, with the flags the verb does accept.
 - **Quote every multi-word value.** A token no flag consumed is a positional, and one beyond what the verb reads is refused before anything is written: `conductor: add-epic takes no positional arguments — 'Title' is an extra argument it does not read. Nothing was written.` followed by `If 'Title' belongs to --title's value, quote the whole value.`
 - **An epic id is positional wherever a verb takes one.** `remove-epic --id e2`, `set-active --id e2` and the rest are diagnosed with the line you meant, not only on `update-epic`.
-- **An id the engine prints is shell-quoted, and a broken one yields no command (0.45.0).** Every invocation the engine prints that names an epic or release id goes through `printedId()`: an id outside the id format (a legacy `My Plan`) is shell-quoted so the printed line runs as written, and an id holding a control character prints no command at all — `<kind> '<escaped id>' holds a control character; no verb can rename it` — rather than a hand-edit instruction. A non-id value in a printed command (a session name, a spec path, a plan path) takes a placeholder when it holds one. Relatedly, `sync` no longer registers a change directory, plan file or archive directory whose name holds a control character or whitespace as an epic id: it registers the rest and names the skipped one on stderr on every run, quiet included. Rename it to register it.
+- **An id the engine prints is shell-quoted, and a broken one yields no command (0.45.0).** Every invocation the engine prints that names an epic or release id goes through `printedId()`: an id outside the id format (a legacy `My Plan`) is shell-quoted so the printed line runs as written, and an id holding a control character prints no command at all — `<kind> '<escaped id>' holds a control character; no verb can rename it` — rather than a hand-edit instruction. A non-id value in a printed command (a session name, a spec path, a plan path) takes a placeholder when it holds one. Relatedly, `sync` no longer registers a change directory, plan file or archive directory whose name holds a control character or whitespace as an epic id: it registers the rest and names the skipped one on stderr on every run, quiet included. Rename it to register it. **As of 0.50.0 every registration path applies the same id rule `add-epic` does** — an epic id must match `^[a-z0-9][a-z0-9._-]*$` — so `sync` and the archive backfill skip a name that fails it (`x|y`, `.hidden`, an uppercase plan file) and say so (see `/pm:sync`).
 - **`--force` is accepted on every mutating verb here** — `add-epic`, `add-many`, `update-epic`, `reorder`, `remove-epic`, `set-active`, `clear-active`, `set-autonomy` and `record-gate-review` — and refused on read-only verbs. It belongs to the guarded write of `.conductor/state.json`, not to any verb's parser, so it may stand anywhere on the line and is never read as an id. `add-epic`, `update-epic` and `claim` used to refuse it outright. `node "$ENGINE" <verb> --help` lists it under "Accepted on every mutating verb".
 
 ## Bulk create with add-many
@@ -114,6 +114,13 @@ conductor.mjs add-many --from /path/to/batch.json
 
 When a `parent` key is present, it is created first and each entry in `epics[]` defaults its `parent` field to it. The operation is **atomic**: every entry is validated up front — id format, uniqueness against existing epics and within the batch itself, lane, status, and parent refs/cycles. On any failure, nothing is written and the command exits non-zero naming the offender. A valid batch is persisted in a single write, so there is no partial-state race. Pass `--from -` to read the batch from stdin. The `parent` key is optional; a bare `{ "epics": [...] }` batch also works.
 
+**`add-many` saves what it accepts or refuses it by name (0.50.0).** Four kinds of input used to vanish with exit 0; each now refuses the whole batch, and nothing is created:
+
+- **The document itself is checked.** It must be a JSON object whose only keys are `parent` (one entry object) and `epics` (an array). A misspelled `"epic": [...]` used to create the parent alone and exit 0.
+- **`links`** is an array, and each element is either a `"<type>:<epic>[:<reason>]"` string (the `--link` grammar) or a `{"type": …, "epic": …, "reason": …}` object — nothing else. The target must be an epic already in the record or an entry of the same batch (earlier or later), and the type must be a known link type. A string link used to be dropped, a link to a missing epic stored dangling and a target-less link stored unrenderable.
+- **A tracker item maps to one epic.** An entry whose `externalUrl` (or, with no URL on either side, `externalId`) is already held by an epic in the record — archived ones included — or by an earlier entry of the same batch is refused, naming the holder.
+- **`externalUpdatedAt` and `priority`** follow the same rules as the flags below: an ISO-8601 date-time with a zone, and one of `P0`–`P3` or `P?`.
+
 **A batch key is not a command-line flag.** `add-many --from b.json --external-id X` is refused before the batch is read (`unknown flag --external-id for add-many — it accepts: --from, --force`); it used to create the batch and drop the flag.
 
 ## Updating an epic
@@ -140,7 +147,9 @@ All validations from `add-epic` apply: no self-parent, no cycles, known status v
 | `--clear-links` | `links` | The named way to empty the array. **Combines with `--link` as of 0.40.0**, so the documented repair is one atomic write. **Refused** (0.44.0) on an epic that owes a reconcile and holds an armed (or pre-0.44.0) `may-invalidate` link — the clear-and-re-supply repair included — until `record-reconcile` answers it. |
 | `--description` | `description` | Durable rationale — why this epic exists. Replaced wholesale on each set. |
 | `--notes` | `notes` | Append-only trail of `{at, actor, text}`. Reads as activity. |
-| `--external-updated-at` | `externalUpdatedAt` | The **tracker's own** timestamp, never a local clock reading. |
+| `--external-updated-at` | `externalUpdatedAt` | The **tracker's own** timestamp, never a local clock reading — an ISO-8601 date-time **with a zone** (`…Z`, `…+00:00`, or Jira's `…+0000`); a bare date, a zoneless time or an impossible date such as February 30 is refused (0.50.0). |
+| `--external-url` | `externalUrl` | The globally unique dedup key — one tracker item, one epic: setting a URL another epic holds (archived included) is refused naming it; `--clear external-url` on the holder frees it (0.50.0). Compared exactly after trimming surrounding whitespace — a trailing `/`, the host's case or a query string make a different URL, so record the tracker's canonical URL. |
+| `--priority` | `priority` | One of `P0\|P1\|P2\|P3\|P?` (`P?` = not yet triaged); anything else is refused and nothing is written (0.50.0). |
 | `--attribute-commit` | `attributedCommits` | **Repeatable**, append-only, in landing order. Resolved at write time and stored as the FULL object name (`HEAD`, a short sha or an annotated tag records the commit it names now); a value that is not a commit in this clone refuses the whole invocation (0.44.0). |
 | `--outcome` | `disposition` | `delivered`, `killed`, `superseded`, `abandoned`, `declined`, or `unreconstructable`. Rendered from `AGENT_OUTCOMES`, so this list cannot drift from what the engine accepts. |
 | `--clear` | any nullable field | **Repeatable** — the uniform unset path. See "Clearing a nullable field" below. |
@@ -197,7 +206,7 @@ conductor: --attribute-commit value "not-a-commit" does not resolve to exactly o
 
 ## Stories, and the third state a checklist needs
 
-Stories are inline progress on an epic — the highest-priority progress source, ahead of a plan or `tasks.md`. As of 0.31.0 they can be created **atomically**, so an epic arrives with its milestones instead of acquiring them one call at a time:
+Stories are inline progress on an epic. **As of 0.50.0 they count together with the epic's task source** (a plan file, or an openspec change's `tasks.md`) — neither hides the other. As of 0.31.0 they can be created **atomically**, so an epic arrives with its milestones instead of acquiring them one call at a time:
 
 ```bash
 conductor.mjs add-epic --id <id> --title "<t>" --lane <lane> --priority <P> \
@@ -219,8 +228,10 @@ The reason is required, and a recorded disposition is never silently replaced. *
 A disposed story leaves **both** sides of the ratio, rendering `3/3 stories · 2 disposed` — the same shape a lifecycle-marked task produces. Never `5/5`, which would claim completion nobody earned; and never `3/5`, which would leave the archive gate refusing forever.
 
 <Note>
-  **The archive gate already refused an epic with an unticked story** — that has been true since dispositions shipped, because outstanding work is read from stories first. What was missing was a way _out_ for work that was genuinely dropped: the refusal pointed at a lifecycle marker that lives on a task's line, and an inline story has no task line to carry one. `--wont-do` is that key. No new refusal was added in 0.31.0.
+  **The archive gate already refused an epic with an unticked story** — that has been true since dispositions shipped, because inline stories are counted as outstanding work. What was missing was a way _out_ for work that was genuinely dropped: the refusal pointed at a lifecycle marker that lives on a task's line, and an inline story has no task line to carry one. `--wont-do` is that key. No new refusal was added in 0.31.0.
 </Note>
+
+**Stories and a task source count TOGETHER (0.50.0).** An epic's progress is the sum of its inline stories and its checkbox source (a plan file, or an openspec change's `tasks.md` — the ARCHIVED one once `/opsx:archive` has moved it); neither hides the other, so adding a story to an epic that has a `tasks.md` leaves every task counted, and the ratio then reads `N/M items`. Before, one story made the tasks unread, so an epic could be archived `delivered` at `1/1` with tasks open. Where both parts hold open work, the archive refusal names each part's remedy and says BOTH must be done — `--story <n> --done` / `--wont-do` for the stories, ticking or the lifecycle declaration for the tasks — or `--carried-to` for the whole remainder. A missing `tasks.md` or plan now warns even when the epic has stories.
 
 ## Ending an epic — the disposition
 
@@ -356,7 +367,7 @@ conductor.mjs update-epic <id> --clear parent --clear external-url
 | --- | --- |
 | `parent` · `description` · `review-mode` · `external-updated-at` | None beyond the field going absent. |
 | `created-at` **(0.41.0)** | Returns the registration date to **absent**, which means UNKNOWN. The next `recover-created-at` will attempt it again from history — so clear-then-recover is the correction path for a date recovered wrongly. |
-| `external-url` | This is the **dedup key** the inward sync procedure matches on. Clear it and the linked item is mirrored again as a **new** epic on the next sync. |
+| `external-url` | This is the **dedup key** the inward sync procedure matches on. Clear it and the linked item is mirrored again as a **new** epic on the next sync. It is also how a genuinely **reopened** tracker item is freed from the archived epic that still holds it (0.50.0), since one item maps to one epic on every write path. |
 | `external-id` | The epic stops being tracker-linked; `record-tracker-refresh` refuses it by name. |
 | `plan` · `spec` | The epic un-claims a source artifact on disk. The next `sync` finds that file orphaned and registers it as a fresh untriaged epic. |
 

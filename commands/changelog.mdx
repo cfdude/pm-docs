@@ -15,7 +15,7 @@ description: "Show pm's own CHANGELOG entries newer than a given version — wha
 
 | Flag | Description |
 | --- | --- |
-| `--since <x.y.z>` | Optional. Sets the floor version explicitly instead of using the repo's stamped `pmVersion`. |
+| `--since <x.y.z>` | Optional. Sets the floor version explicitly instead of using the repo's stamped `pmVersion`. It takes only a version in `x.y.z` form — anything else (`v0.3.0`, `0.3`, a typo) is refused rather than read as "since the beginning" (0.50.0), which used to print the entire changelog. |
 
 ## Relationship to /pm:upgrade
 

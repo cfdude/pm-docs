@@ -55,10 +55,11 @@ The list is **closed**, and each row matches a FIXED label the block message pri
 
 **Segments are split on newline, `;`, `&&`, `||` and `|`** (except the `>|` no-clobber operator), and the scan runs per segment, so a write shape after a `&&` is caught. The command word is taken after its last `/`, and a leading `VAR=value`, `sudo`, `env` or `command` is skipped.
 
-### The two fail-open modes, stated plainly
+### The three fail-open modes, stated plainly
 
 - **An unreadable record allows every Bash call CARRYING A COMMAND.** This is a carve-out, not a gap: one remedy the unreadable-state message prints redirects into the record itself and would otherwise match the shape list.
 - **An absent record leaves the guard dormant.** With no `.conductor/state.json` the hook exits 0 silently for every tool. That is the plugin's standing dormancy contract, and it is exactly why destroying the record is a shape.
+- **A hook line the engine refuses fails open too** — a hand-edited `hooks.json` line carrying a flag `gate-guard` does not declare exits 1, and Claude Code runs the tool call unguarded (see "A refused hook line fails OPEN, deliberately" above).
 
 ### What it CANNOT see
 
@@ -162,5 +163,5 @@ Do not allow an Edit/Write aimed at `state.json` itself as a way out — that wa
 </Warning>
 
 <Note>
-  The gate guard hook is dormant until `/pm:init` has been run in a project. It activates only in projects that have been initialized and have a `.conductor/state.json` present — and an absent or unreadable record is one of the two fail-open modes documented above.
+  The gate guard hook is dormant until `/pm:init` has been run in a project. It activates only in projects that have been initialized and have a `.conductor/state.json` present — and an absent or unreadable record is one of the fail-open modes documented above.
 </Note>

@@ -169,5 +169,5 @@ The rules block is:
 </Warning>
 
 <Tip>
-  `conductor.mjs verify-state` fails loudly if `state.json` has been modified more recently than the last render stamp — a mechanical check for accidental hand-edits. Run it any time you suspect the file has drifted, or wire it into your own pre-commit checks. A clean output means the state PM is working from matches what was last rendered.
+  [`conductor.mjs verify-state`](/commands/verify-state) compares `state.json`'s revision and mtime against the engine's **last recorded write** — the stamp the last render wrote, or the `lastSave` every engine save adds to it, whichever is later (0.50.0). A hand-edit advances neither, so it fails loudly when the file changed at the same revision as that write, when the revision went backwards, or when it moved past any revision the engine recorded — a mechanical check for accidental hand-edits. Saves by verbs that do not re-render (a claim, `set-activity-log`) exit 0 with a note that `PROJECT.md` may be stale. It cannot see a hand-edit followed by an engine save, which re-baselines over it. Run it any time you suspect the file has drifted, or wire it into your own pre-commit checks.
 </Tip>
