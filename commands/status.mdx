@@ -62,6 +62,10 @@ description: "Re-render PROJECT.md from state.json and display the full briefing
   </Card>
 </CardGroup>
 
+<Note>
+  **A Gate 1 verdict now goes stale when a reviewed artifact is amended (0.51.0, #198).** The Gate 1 cell on this briefing and on the SessionStart brief reads `⚠ stale` once a recorded artifact changes, and `⚠ unverifiable` for an artifact that could not be read when the verdict was recorded. A verdict recorded before this release carries no digests and renders exactly as before. A live change's `tasks.md` is never digested, and staleness never blocks an archive. See [`/pm:epic`](/commands/epic).
+</Note>
+
 ## Progress counts stories and tasks together (0.50.0)
 
 **Progress is the UNION of two parts, and an archived change is still read.** An epic's count sums its inline **stories** (a story recorded `--wont-do` leaves both sides of the ratio) and its **checkbox source** — its plan file, or for an openspec-lane epic the change's `tasks.md`. Neither hides the other: adding a story to an epic that has a `tasks.md` no longer makes the tasks unread, and the ratio then counts `items` (`N/M items`).
@@ -80,11 +84,24 @@ The engine infers this from nothing else: not the wording, not the commands the 
 
 ## Auditing the record itself — `integrity`
 
-`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A recorded commit sha the repository can no longer resolve — orphaned by a squash-merge and due for deletion at the next `gc`, or already gone. An epic left open in a release that already delivered, and not among the epics that release cut on purpose. An epic something else declares it supersedes, still sitting queued or active. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no (or a withdrawn) Gate 1. An epic archived with an `ungated` Gate 2. An archived openspec-lane epic whose Gate 2 was withdrawn and not recorded again (`archived-with-withdrawn-gate-2`, 0.43.0). An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to. An epic in a status the engine does not define. A `github-issues` tracker whose recorded repo is not `owner/name` or `HOST/owner/name` (`tracker-repo-not-a-github-repository`, 0.45.0) — such a repo gets no literal `gh` step until it is re-recorded, and the finding carries the re-record command, plus, for a secondary, its `--remove` printed shell-quoted. A `delivered` openspec epic whose archived spec deltas never reached the main specs (`delivered-epic-spec-deltas-absent`, 0.50.0, below).
+`integrity` is a **read-only** audit of the conductor's own record: shapes that cannot be true. An archived epic whose task source exists with nothing ticked. One change registered under two lanes. A recorded commit sha the repository can no longer resolve — orphaned by a squash-merge and due for deletion at the next `gc`, or already gone. An epic left open in a release that already delivered, and not among the epics that release cut on purpose. An epic something else declares it supersedes, still sitting queued or active. A gate verdict whose recorded range does not reach the commits its own note cites. A gate recorded as bookkeeping rather than review. A `delivered` epic that attributed no commits. An archived openspec-lane epic with a passing Gate 2 and no (or a withdrawn) Gate 1. An epic archived with an `ungated` Gate 2. An archived openspec-lane epic whose Gate 2 was withdrawn and not recorded again (`archived-with-withdrawn-gate-2`, 0.43.0). An epic the archive-drift heal flipped that reads `outcome: unknown` while carrying a passing Gate 2. A dangling epic reference. An archive directory no epic corresponds to. An epic in a status the engine does not define. A `github-issues` tracker whose recorded repo is not `owner/name` or `HOST/owner/name` (`tracker-repo-not-a-github-repository`, 0.45.0) — such a repo gets no literal `gh` step until it is re-recorded, and the finding carries the re-record command, plus, for a secondary, its `--remove` printed shell-quoted. A `delivered` openspec epic whose archived spec deltas never reached the main specs (`delivered-epic-spec-deltas-absent`, 0.50.0, below). **0.51.0 adds four more kinds of drift**, each named in the next section.
 
 ```bash
 conductor.mjs integrity
 ```
+
+### Four checks new in 0.51.0
+
+- **`tracker-item-held-by-two-epics`** names two epics holding one tracker item (the pre-0.50.0 duplicates the writers now refuse). It names both holders and the remedy, `update-epic <one> --clear external-url` (#231).
+- **`archived-change-also-live`** names a change present both live and under `archive/` with identical content, the shape upstream `openspec archive` leaves because it copies a tree rather than moving it (#215). The remedy is `git rm -r` of the live copy. A live change that differs from its archived namesake is a re-proposal and is not reported.
+- **`late-failing-gate-review`** reports a failing gate verdict recorded after the epic's merge as the real retrospective review it is, and `gate-recorded-as-bookkeeping` no longer reports it (#201).
+- **`archived-delivered-fails-delivered-obligation`** names an archived epic recorded `delivered` that no longer meets what `delivered` requires, by a path no gate sees: a Gate 2 flipped to fail after the archive, the heal re-archiving a changed epic, a stripped `carriedTo`, or tasks that changed on disk. Epics whose Gate 2 is withdrawn or `ungated` are left to their own checks.
+
+`archive-directory-has-no-epic` also reports an archive directory the 0.50.0 date rule set aside, in the same words `sync` uses.
+
+### `delivered-release-epic-left-open` — and the marker that settles it (0.51.0)
+
+A release carrying the **delivered marker** (`release <id> --deliver`, below) is delivered, full stop: every non-archived member not in its `deferred[]` is reported, `active` or not. A release with **no** marker keeps the member-derived reading (at least one member `delivered` and none `active` or `paused`, so a staged release in flight stays silent), and that finding now says the reading is inferred and prints `release <id> --deliver` as the way to replace the guess with the fact. That replaces the `--status active` workaround the check's earlier wording suggested. Archiving the last active member of a release that is still in flight no longer reads as the release being delivered.
 
 Every check is reported with its count **including the ones that found nothing**, so a check that measured nothing is visibly a check that ran. It writes no state, blocks no command, and repairs nothing — each finding names the epic, and the remediation is a command you run.
 
@@ -101,6 +118,8 @@ The main spec is read from the **index**, not the working tree and not `HEAD`, i
 <Warning>
   **The stated cost: from `openspec archive` until `git add`, the index still holds the old main specs, so a CORRECT archive is reported in that window too** — stage `openspec/` whole and it clears. That window is why the condition is never written into `PROJECT.md`: `integrity`, the SessionStart briefing and the `render` verb's printed output carry it. It is a standing condition, **never a refusal** — no archive path is refused on it.
 </Warning>
+
+**A change deliberately archived with `--skip-specs` is waived, not fixed (0.51.0).** `update-epic <id> --spec-deltas-waived "<why>"` takes that epic out of this report (the reason is the value and cannot be blank), and `update-epic <id> --clear spec-deltas-waived` puts it back. The flag is refused for an epic outside the check's scope (a delivered, openspec-lane epic whose change is archived), and a waiver is never silent: the briefing and the `render` verb's output print `SPEC DELTAS WAIVED (N)` with the epic ids, so a waived epic whose deltas really are missing is distinguishable from a clean one. A waived epic's archived change still discharges other epics' obligations.
 
 Where git cannot answer at all (no repository), no presence or absence finding is made, and each surface prints one line instead, the same way on all three:
 
@@ -220,6 +239,8 @@ conductor.mjs release 0.27.0 --member <epicId>
 conductor.mjs release 0.27.0 --defer "<epicId>:<why it was cut>"
 conductor.mjs release 0.27.0 --unmember "<epicId>:<why>"
 conductor.mjs release 0.27.0 --undefer "<epicId>:<why it is back in scope>"
+conductor.mjs release 0.27.0 --deliver
+conductor.mjs release 0.27.0 --undeliver
 conductor.mjs release show 0.27.0
 ```
 
@@ -229,6 +250,16 @@ conductor.mjs release show 0.27.0
 - **The engine proposes nothing.** No epic is auto-assigned; adding, re-prioritizing, or archiving epics changes membership for none of them. Grouping is a scope judgment, and the scope judgment is the thing being preserved.
 - **An exclusion is not an ending.** A deferred epic keeps its status and gets no disposition of its own — it stays in the backlog because it is still work someone may do. What it loses is membership of that release.
 - **Re-deferring with a NEW reason keeps the old one (0.50.0).** `deferred[]` holds the current reason, and `{op: "redefer", reason, was, wasRecordedAt}` goes to the release's `amendments[]`, where `release show` renders both. The same reason again writes nothing.
+
+### Recording that a release shipped — `--deliver`, and its inverse `--undeliver` (0.51.0)
+
+- `--deliver` sets `release.delivered = {recordedAt}`. It is a marker, not a judgment, so no reason is demanded. `integrity`'s `delivered-release-epic-left-open` reads it instead of guessing from the members. Marking an already-marked release changes nothing.
+- `--undeliver` removes the marker (the release returns to the member-derived reading). It is refused when there is no marker to remove, and `--deliver` together with `--undeliver` is refused. Nothing is written in either refusal.
+- A release recorded before this existed has no marker and nothing needs migrating: absent means "derive it from the members", exactly as before. `release show` renders the marker.
+
+### The derived `candidate review:` line (0.51.0)
+
+`release show` also prints a **`candidate review:`** line, computed from the candidate members' existing Gate 2 records with nothing stored. A candidate member is a release member that is not archived and has at least one attributed commit. The line reads `converged at <sha>` when every candidate member carries a passing Gate 2 verdict over one shared range (the same base **and** the same head). Otherwise it reads `NOT converged`, listing each distinct range with its members, each member with no Gate 2 verdict (a withdrawn Gate 2, or one with no recorded head, counts as no verdict) and each member whose verdict is `fail`. A release with no candidate members prints no such line. The procedure behind it is the shipped `release-candidate` skill; the budget rule is on [`/pm:review-mode`](/commands/review-mode).
 
 ### Reading one back, and taking it back — `release show`, `--unmember`, `--undefer`
 

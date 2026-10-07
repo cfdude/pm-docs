@@ -60,7 +60,20 @@ conductor: refused to write the pm rules block into CLAUDE.md — its marker lin
 
 **An unreadable `.conductor/state.json`.** Conflict markers, truncation or the wrong shape: the refusal names the reason and the git remedies (the full message is in `/pm:gate-guard`). Fix the file, then re-run. `--force` does not override it.
 
-`upgrade` also adds three `.gitignore` entries through the `ensureGitignore()` it already runs: `.conductor/state.json.lock*` (the state lock and its break file), `.conductor/state.json.tmp*` (a save's temp file, left only by a save killed mid-write) and `.conductor/session-claim.json*` (appended alongside the older exact `session-claim.json` entry, which is left in place, harmless).
+`upgrade` also back-fills `.gitignore` through the `ensureGitignore()` it already runs, adding any of pm's per-checkout files the file lacks: `.conductor/brief.txt` (the SessionStart/PreCompact brief), `.conductor/detours.log`, `.conductor/write-conflicts.log` and its rotated `.conductor/write-conflicts.log.prev`, `.conductor/write-conflicts.latch`, the Honcho outbox `.conductor/honcho-memories.log` (written by name, so a repo does not depend on a global `*.log` rule to keep it out of git), `.conductor/commit-watch.json`, `.conductor/commit-observe.json*`, `.conductor/session-claim.json*` (appended alongside any older exact `session-claim.json` entry, which is left in place, harmless), `.conductor/state.json.lock*`, `.conductor/state.json.tmp*` and `.conductor/activity/`. It never removes a line.
+
+**An ignore line does nothing for a file git already tracks (0.51.0).** 14 of 24 pm-managed repos on one machine had committed `.conductor/brief.txt`, so every snapshot left a changed tracked file. When any of those paths is in the index, `upgrade` (and `init`) print an `⚠ UNTRACK PM'S SESSION FILES` block naming exactly the tracked entries:
+
+```text
+git rm -r --cached --quiet -- '.conductor/brief.txt'
+git commit -m "chore(pm): stop tracking the conductor's session files"
+```
+
+Run it from the project root. `--cached` removes the files from git only; they stay on disk. pm never runs it itself. The block repeats on every `upgrade` until the files are untracked, and is silent wherever git cannot answer (no repository, or no index). There is no `state.json` change and no migration.
+
+## What 0.51.0 changes — rules-block text, no migration
+
+0.51.0 ships **no `state.json` schema change and no migration**: the newest `MIGRATIONS` entry is still 0.44.0, and every field the release adds is optional. It does change what the rules block says, so `/pm:upgrade` is still the step that delivers it: a paragraph under "Re-read the source before an epic becomes the work" directing the agent to confirm an OpenSpec epic's planning is complete (every artifact the project's OpenSpec schema requires exists, and they agree) before treating it as ready to apply, the **execution profile** section ([`/pm:profile`](/commands/profile)), and the **release candidate** section. Run `/reload-plugins` first, then `/pm:upgrade` in each repo.
 
 ## What 0.45.0 changes — rules-block text, no migration
 
@@ -102,7 +115,7 @@ Epics that already existed are the problem the migration solves — and it canno
   **Absence means UNKNOWN. It never means today.** The migration does not stamp upgrade day onto every pre-existing epic. A date that says "registered the day you upgraded" is worse than no date, because a staleness question would then read every legacy epic as brand new.
 </Warning>
 
-**`recover-created-at` is the re-runnable half.** It sweeps every dated-less epic and takes its `createdAt` from the commit that first introduced that id into `.conductor/state.json`, reading local git history only:
+**`recover-created-at` is the re-runnable half.** It sweeps every dated-less epic and takes its `createdAt` from the commit that first introduced that id into `.conductor/state.json`, reading local git history only. **As of 0.51.0 the date is the commit's AUTHOR date**, not the committer date: a rewrite (rebase, amend, cherry-pick) moves the committer date later than the authoring, and one epic was stamped 07-09 when its only introducing commit was authored 06-30. It keeps full history and takes the earliest match by date. Dates already stamped are never overwritten; clear one with `update-epic <id> --clear created-at` and re-run the verb.
 
 ```bash
 conductor.mjs recover-created-at

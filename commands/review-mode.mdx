@@ -4,7 +4,7 @@ sidebarTitle: "/pm:review-mode"
 description: "Set the repo review dial: off (self-review only), standard (one reviewer per gate), or thorough (two independent reviewers, adjudicated on disagreement)."
 ---
 
-`/pm:review-mode` sets the review intensity for the entire repository. The dial controls how many fresh-context reviewers run at each gate — a single repo-wide setting that individual epics can escalate above but never de-escalate below. It is a pure instruction-layer setting: PM never runs a review itself, it only shapes what the `CLAUDE.md` rules block tells your agent to do.
+`/pm:review-mode` sets the review intensity for the entire repository. The dial controls how many fresh-context reviewers run at each gate — a single repo-wide setting that a lane or an individual epic can override in either direction (0.51.0; it was escalate-only before). It is one field of the [execution profile](/commands/profile). It is a pure instruction-layer setting: PM never runs a review itself, it only shapes what the `CLAUDE.md` rules block tells your agent to do.
 
 ## The three levels
 
@@ -49,29 +49,27 @@ Unlike `init` and `upgrade`, this verb refuses AT the block write, after its sta
 
 An unreadable `.conductor/state.json` is refused before anything is written, exit 11, with the git remedies (see `/pm:gate-guard`).
 
-## Per-epic escalation
+## Per-epic override — any direction, most specific wins
 
-Individual epics can be escalated above the repo-wide dial without changing the setting for the whole repo:
+**Changed in 0.51.0.** A single epic can carry its own review mode, stricter **or** looser than the repo-wide dial: a security-sensitive epic in an otherwise `standard` repo, or a docs tweak in a `thorough` one.
 
 ```bash
 conductor.mjs update-epic <id> --review-mode thorough
+conductor.mjs add-epic --id <id> --lane claude-code --review-mode off
 ```
 
-The escalation rules are strict:
+The rules:
 
-- An epic can **always escalate** above the repo dial. A P0 epic in a `standard` repo can run as `thorough`.
-- An epic can **never de-escalate** below the repo dial. Attempting to set `--review-mode off` on an epic in a `standard` repo is rejected with a non-zero exit and leaves state unchanged.
-- The **effective mode** for a given epic is `max(global dial, epic override)`. If you later raise the global dial above an epic's override, the global dial wins — an override never pins a lower effective mode than the current global setting.
+- The effective mode for an epic is resolved most-specific-wins: **the epic's own value, else its lane's (`set-profile --lane <lane> --review <m>`), else the repo-wide dial, else `standard`.** It is **not** the maximum of the layers: an epic set below the dial resolves to its own lower value.
+- Earlier versions refused that (escalate only, `max(global dial, epic override)`). The refusal is gone by decision. What replaces it is visibility: `conductor.mjs profile --epic <id>` and `rules --epic <id>` name the layer each value came from and, when an epic lowers a value, the higher value it overrides, and the activity log records the change.
+- `--review-mode` is accepted by `add-epic`, `add-many` (as the batch key `reviewMode`) and `update-epic`.
+- Query the effective value with `conductor.mjs rules --epic <id>` (look for "Current mode") or `conductor.mjs profile --epic <id>`.
 
-To query the effective mode for a specific epic, read `state.epics[].reviewMode` alongside `state.reviewMode`.
+**Every override has an unset.** `conductor.mjs update-epic <id> --clear review-mode` drops the epic's own value, and the epic then follows its lane's value or the repo dial. That may be higher **or** lower than what the epic held. The repo-wide dial has its inverse too: `set-review-mode` ships none of its own, and `set-profile --unset review` is it (it removes the recorded dial, so the default `standard` applies again).
 
-**An override has an unset (0.45.0).** This page used to say there was none; there is:
+## When several changes are reviewed as one release candidate
 
-```bash
-conductor.mjs update-epic <id> --clear review-mode
-```
-
-That drops the epic's override and returns it to the repo dial. It is not the same as `--review-mode off`, which is a de-escalation and stays refused.
+**New in 0.51.0.** Building a release from several changes, the budget applies **per candidate, not per change**: the converged review runs at the **highest** effective `review` among the candidate members (the members that are not archived and have built work), so one `thorough` member makes the whole candidate `thorough`. When members resolve to different levels, the procedure names each and recommends splitting the candidate by level. The whole procedure (batching, one integration branch, one capped review round, recording the same range as every member's Gate 2) is the shipped `release-candidate` skill; `release show` prints the derived `candidate review:` line, see [`/pm:status`](/commands/status).
 
 ## Recording the verdict this dial asked for
 

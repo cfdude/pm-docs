@@ -89,6 +89,7 @@
             "pages": [
               "commands/tracker",
               "commands/review-mode",
+              "commands/profile",
               "commands/cross-spec-review",
               "commands/lane-routing",
               "commands/gate-guard",
