@@ -42,6 +42,9 @@ Before scaffolding, your agent should also load the `conductor` skill — the ag
   <Step title="Offers tracker mirroring (conditional)">
     If PM detects real signals of active issue-tracker usage — a connected tracker MCP, issue-key conventions in your history, or an explicit note in your codebase — it offers to connect an external mirror. Being hosted on GitHub, GitLab, or Bitbucket is **not** a signal. Saying no loses nothing; PM tracks everything locally regardless.
   </Step>
+  <Step title="Asks for the execution profile (0.51.0)">
+    `init` writes **no** model on its own — it asks, and records what you choose with `set-profile`. It recommends `opus` at `medium` effort for every job role (`implement`, `test`, `review`), and offers a cheaper option as an alternative: `sonnet` for `implement` and `haiku` for `test` (`haiku` takes no effort; every other model needs one). It also offers lane overrides, such as a lower `review` for the `claude-code` lane. If you decline, nothing is recorded and every field resolves to its default. See [`/pm:profile`](/commands/profile).
+  </Step>
   <Step title="Shows /pm:status output">
     Init finishes by printing the full conductor briefing so you can see your registered epics and immediately begin triage.
   </Step>
@@ -56,6 +59,10 @@ Once init completes, PM prompts you to triage your epics. Triage means:
 - Setting each epic's **status** to `active`, `queued`, or `later`
 
 Until you triage them, any epics discovered during the scan sit in the `untriaged` lane. PM won't recommend untriaged epics via `/pm:next` — triage is the gate that admits work into the priority queue.
+
+## Session files are git-ignored (0.51.0)
+
+`init` writes pm's per-checkout files into `.gitignore` by name, `.conductor/brief.txt`, `.conductor/write-conflicts.log.prev` and `.conductor/honcho-memories.log` among them, instead of relying on a global `*.log` rule. An ignore line does nothing for a file git already tracks, so when any of them is in the index `init` prints an `⚠ UNTRACK PM'S SESSION FILES` block with the exact `git rm -r --cached` line and a commit line. pm never runs it. See [`/pm:upgrade`](/commands/upgrade).
 
 ## Idempotency
 

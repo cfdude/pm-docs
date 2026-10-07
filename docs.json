@@ -94,7 +94,8 @@
               "commands/gate-guard",
               "commands/claim",
               "commands/activity",
-              "commands/feedback"
+              "commands/feedback",
+              "commands/profile"
             ]
           }
         ]
