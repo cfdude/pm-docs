@@ -6,6 +6,15 @@ description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issu
 
 `/pm:sync` scans your project for work that should be tracked as epics but isn't yet. It picks up new OpenSpec proposals and Superpowers plans found on disk, reconciles `openspec/changes/archive/`, and — where a tracker's `direction` includes `inward` and it names a scope to read — pulls open items in as untriaged epics. After sync completes, PM prompts you to triage any newly registered epics: assign priorities, set statuses, and add any dependency links.
 
+## Previewing and selecting — `--dry-run` and `--only`
+
+**New in 0.51.0 (#167).** `sync` can register a lot at once: the first run after an upgrade backfills every archived change on disk. Two flags make that reviewable.
+
+- **`sync --dry-run`** prints what a real run would register (changes, plans, archived changes), flip (`planned` to `untriaged`) and heal, flags the one-time archive backfill when it would be one, and writes **nothing**: no `state.json`, no `PROJECT.md`, no `archiveBackfilledAt` marker. Exit 0. It still refuses a bad `--only`. It is a read, so it has no inverse to undo.
+- **`sync --only <id> [--only <id> …]`** limits **registration** to the named change, plan or archived-change ids (an archived change is named by its id without the date prefix). An id that is already an epic is accepted and does nothing; an id that is neither a candidate nor an epic is refused before anything is written. A selective run does **not** stamp the backfill marker, so the next plain `sync` still announces the backfill. The `planned` to `untriaged` flip and the archive-drift heal are not registrations and still run.
+
+The two combine: `sync --dry-run --only <id>`.
+
 ## The archive backfill
 
 <Info>
@@ -13,6 +22,8 @@ description: "Scan for new OpenSpec proposals, Superpowers plans, or GitHub Issu
 
   The backfill is visible, one-time, and announced — never a silent side effect. A state-level `archiveBackfilledAt` marker records that it happened. A backfilled epic carries `recordedBy: "archive-backfill"` on its disposition and **no gate verdict at all**: it never passed through the conductor while in flight, so writing one would assert a permanent, unclearable condition against every change archived before the conductor existed.
 </Info>
+
+**An epic can claim its change by name (0.51.0, #200).** An epic whose `--plan` or `--spec` names a file under `openspec/changes/[archive/]<name>/` holds that change for the backfill, so a change proposed under a different name than its premise epic is no longer registered a second time. See [`/pm:epic`](/commands/epic).
 
 ## What it registers
 

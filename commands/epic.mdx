@@ -29,7 +29,7 @@ conductor.mjs add-epic \
 - **`--external-id`** — Links the epic to an issue key in a configured external tracker (e.g. `JOB-506`). See `/pm:tracker`.
 - **`--external-url`** — Full URL to the corresponding issue in the external tracker. **One tracker item maps to one epic** (0.50.0): a URL another epic already holds — archived ones included — is refused, naming that epic and its status. With no URL on either side, the bare `--external-id` is the key. The URL is compared exactly after trimming surrounding whitespace, so record the tracker's canonical URL.
 - **`--plan`** — Repo-relative path to a markdown plan file. Used as the progress source for `superpowers`-lane epics, and the association `sync` dedups on.
-- **`--spec`** — Repo-relative path to the **design document this epic came from** (0.32.0). Provenance, not a progress source: nothing is counted from it. Many epics may name one document — that is the point, since a design usually implies more than one piece of work — and `verify-specs` reports which documents have no epics drawn from them.
+- **`--spec`** — Repo-relative path to the **design document this epic came from** (0.32.0). Provenance, not a progress source: nothing is counted from it. Many epics may name one document — that is the point, since a design usually implies more than one piece of work — and `verify-specs` reports which documents have no epics drawn from them. **A path inside an OpenSpec change** (`openspec/changes/<name>/…` or `openspec/changes/archive/<dir>/…`) also records which change the epic owns, whatever the epic is called (0.51.0, #200): `integrity`'s `archive-directory-has-no-epic` and `sync`'s archive backfill both read it, so a change proposed under a different name than its premise epic is held by that epic instead of reported as unheld or registered a second time. `--clear spec` / `--clear plan` is the inverse. `--plan` and `--spec` also refuse a trailing-slash value and a path that exists and is a directory.
 - **`--link`** — Validated, not just parsed: the referenced epic id must already exist, the value must split into at least `type` and `epic`, and **the type must be one of the known set** (0.34.0). The flag is repeatable.
 
 ### Link types are a closed vocabulary — and only two of them do anything
@@ -133,31 +133,39 @@ conductor.mjs update-epic <id> \
   [--plan <path>] [--parent <id>] [--external-id <KEY>] [--external-url <url>] \
   [--link "<type>:<epic>[:<reason>]"] [--clear-links] [--clear <field>] \
   [--description "<why>"] [--notes "<what>"] \
-  [--external-updated-at <iso>] [--review-mode off|standard|thorough]
+  [--external-updated-at <iso>] [--spec <path>] [--spec-deltas-waived "<why>"] \
+  [--review-mode off|standard|thorough] [--model <role>=<model>[:<effort>]] \
+  [--clear-model <role>] [--verbosity quiet|verbose]
 ```
 
 All validations from `add-epic` apply: no self-parent, no cycles, known status values, and referenced epic ids must exist. On an unknown id or any invalid flag value, the command exits non-zero and writes nothing — including an unrecognized flag name, which used to silently no-op and print a false "updated" success, and an unquoted multi-word value: `update-epic e1 --title My Title` stored `My` and now refuses `'Title'` as an extra argument, with a hint to quote the whole value. Both refusals happen before dispatch and apply to every verb on this page — see "The command line" above.
 
-**The whole flag surface.** `update-epic` accepts 31 flags, declared once in `EPIC_FLAGS` — the same declaration `add-epic`'s and `add-many`'s surfaces are projected from, so the three cannot drift apart. Beyond the shape above:
+**The whole flag surface.** `update-epic` accepts 35 flags, declared once in `EPIC_FLAGS` — the same declaration `add-epic`'s and `add-many`'s surfaces are projected from, so the three cannot drift apart. Beyond the shape above:
 
 | Flag | Writes | Notes |
 | --- | --- | --- |
 | `--lane` | `lane` | Re-routes an epic in place. |
-| `--plan` | `planPath` | Attaches a plan to an epic created without one. |
+| `--plan` | `planPath` | Attaches a plan to an epic created without one. A trailing-slash value, or a path that exists and is not a regular file (a directory), is refused naming it (0.51.0) — a plan is a file; a path that does not exist yet is still accepted, since a plan may be attached before it is written. The same rule applies on `add-epic`, and to an `add-many` entry's `planPath` / `specPath`. |
+| `--spec` | `specPath` | The design document this epic's work was drawn from — provenance, **many-to-one**. Same file-not-directory refusal as `--plan`. |
+| `--spec-deltas-waived` | `specDeltasWaived` | **New in 0.51.0.** Records that a delivered change's archived spec deltas were **deliberately not applied** to the main specs (a change archived without applying its specs). The value IS the reason, so a blank one is refused. **Refused unless the epic is in the check's scope** — a delivered, openspec-lane epic whose change directory is archived under `openspec/changes/archive/` — and the refusal names that scope and writes nothing. A waiver is never silent: the briefing and the `render` verb's output print `SPEC DELTAS WAIVED (N)` with the epic ids. `integrity`'s `delivered-epic-spec-deltas-absent` and the briefing's spec-sync block then stop reporting the epic; its archived change still discharges other epics' obligations. Inverse: `--clear spec-deltas-waived`. |
+| `--model` | `model` | **New in 0.51.0.** **Repeatable.** The epic's model and effort for one job role (`implement`, `test` or `review`), as `<role>=<model>[:<effort>]`. `haiku` takes no effort; every other model requires one. Setting one role leaves the others. Also accepted by `add-epic` and `add-many` (batch key `model`). See [`/pm:profile`](/commands/profile). |
+| `--clear-model` | `model` | **Repeatable.** Removes one role's pair; `--clear model` removes every role. |
+| `--verbosity` | `verbosity` | **New in 0.51.0.** The epic's own report frequency, `quiet` or `verbose`. Also accepted by `add-epic` and `add-many`. |
 | `--clear-links` | `links` | The named way to empty the array. **Combines with `--link` as of 0.40.0**, so the documented repair is one atomic write. **Refused** (0.44.0) on an epic that owes a reconcile and holds an armed (or pre-0.44.0) `may-invalidate` link — the clear-and-re-supply repair included — until `record-reconcile` answers it. |
 | `--description` | `description` | Durable rationale — why this epic exists. Replaced wholesale on each set. |
 | `--notes` | `notes` | Append-only trail of `{at, actor, text}`. Reads as activity. |
 | `--external-updated-at` | `externalUpdatedAt` | The **tracker's own** timestamp, never a local clock reading — an ISO-8601 date-time **with a zone** (`…Z`, `…+00:00`, or Jira's `…+0000`); a bare date, a zoneless time or an impossible date such as February 30 is refused (0.50.0). |
 | `--external-url` | `externalUrl` | The globally unique dedup key — one tracker item, one epic: setting a URL another epic holds (archived included) is refused naming it; `--clear external-url` on the holder frees it (0.50.0). Compared exactly after trimming surrounding whitespace — a trailing `/`, the host's case or a query string make a different URL, so record the tracker's canonical URL. |
 | `--priority` | `priority` | One of `P0\|P1\|P2\|P3\|P?` (`P?` = not yet triaged); anything else is refused and nothing is written (0.50.0). |
-| `--attribute-commit` | `attributedCommits` | **Repeatable**, append-only, in landing order. Resolved at write time and stored as the FULL object name (`HEAD`, a short sha or an annotated tag records the commit it names now); a value that is not a commit in this clone refuses the whole invocation (0.44.0). |
+| `--status` (non-archived) | `status` | On an epic whose change directory is archived on disk, `--status <non-archived>` no longer claims a status the heal undoes (0.51.0): the success line says the `--status` was not kept, instead of printing "updated" while `render` restores `archived`. |
+| `--attribute-commit` | `attributedCommits` | **Repeatable**, append-only, in landing order. Resolved at write time and stored as the FULL object name (`HEAD`, a short sha or an annotated tag records the commit it names now); a value that is not a commit in this clone refuses the whole invocation (0.44.0). **A commit the array already holds, or one given twice in the call (`HEAD` and its full sha included), is a no-op (0.51.0, #237):** exit 0, said on stderr, nothing written for it — so retrying after a failed commit hook no longer inflates the array. Attributing a commit that turns a passing Gate 2 stale says so and names both ways out: re-record Gate 2, or `--withdraw-commit` for lifecycle bookkeeping. |
 | `--outcome` | `disposition` | `delivered`, `killed`, `superseded`, `abandoned`, `declined`, or `unreconstructable`. Rendered from `AGENT_OUTCOMES`, so this list cannot drift from what the engine accepts. |
 | `--clear` | any nullable field | **Repeatable** — the uniform unset path. See "Clearing a nullable field" below. |
 | `--reason` | `disposition` | Required for every outcome except `delivered`. |
 | `--carried-to` | `disposition` | Where unfinished work went. |
 | `--deferral` | `deferralAssertion` | **Repeatable** — `"<epicId>:<section>"`, and as of 0.41.0 `"<epicId>::<section>"` is accepted too. Splits on the first colon, which is correct here because the left half is an epic id and cannot contain one; a colon in `<section>` is part of the section. |
 | `--declined-deferral` | `deferralAssertion` | **Repeatable** — `"<what>::<why not>"`. Both halves are free text, so `::` separates them explicitly. A single colon still works where the value carries only one; two or more with no `::` are **refused** rather than guessed, and both halves must be non-empty. |
-| `--no-deferrals` | `deferralAssertion` | The explicit "there are none". |
+| `--no-deferrals` | `deferralAssertion` | The explicit "there are none". Refused together with `--deferral` or `--declined-deferral` (0.51.0, #233) — "there are none" and "here is one" contradict, and nothing is written. |
 | `--withdraw-commit` | `attributedCommits`, `withdrawnCommits` | **Repeatable**. Removes ONE occurrence (the last) of a commit this epic attributed, and records why. Matched by commit IDENTITY where the value resolves — a full sha withdraws a legacy short entry of the same commit — and by exact spelling otherwise, so a legacy value that no longer resolves stays withdrawable. The withdrawal records the stored entry removed. Refuses a sha the epic never attributed. |
 | `--withdrawal-reason` | `withdrawnCommits`, `withdrawnGateReviews` | Required by `--withdraw-commit` and by `--withdraw-gate-review`, and refused on its own; deliberately **not** `--reason` — that one is the disposition's. |
 | `--withdraw-gate-review` | `gateReview`, `withdrawnGateReviews` | **Repeatable** (0.43.0) — distinct gates are withdrawn together under the one reason. Withdraws a recorded gate verdict that does not belong on this epic, and records why with `--withdrawal-reason`. The WHOLE entry moves, `superseded` included, into `withdrawnGateReviews` — recorded, never erased. |
@@ -189,6 +197,10 @@ The withdrawal is **recorded**, not erased: `withdrawnCommits` keeps `{sha, reas
 </Warning>
 
 Catch up on work already in flight in landing order, then attribute forward. The array is append-only, and **every attributed commit must be reached by** a recorded Gate 2 `headSha` — equal to that head or an ancestor of it — whatever its position; one the head does not reach reads as a stale verdict and refuses the archive. Through 0.43.0 only the LAST entry was compared, so an ancestor attributed after an uncovered descendant read fresh.
+
+**The array is a set read against the head, not a sequence (0.51.0, #216).** A catch-up of an earlier commit appends an ancestor after its descendants, so the last entry is not the tip, and nothing the engine reads depends on position. The stale-Gate-2 remedy no longer tells you to record `--head-sha <the last attributed commit>`: it names the attributed commit every other one is an ancestor of, and the parent of the earliest attributed commit as the base. `integrity`'s bookkeeping arm dates "the merge commit" by the latest commit instead of the last element. Re-attributing the head to "repair" the order is unnecessary, and is now a no-op.
+
+**Commits made after a recorded Gate 2 (0.51.0, #205).** A lifecycle commit a required task makes after the gate (lessons routed by item 7, the task-list tick) has two wrong records if attributed blindly: it stales the verdict, or the array omits a commit its own task list claims. The rule is ordering. Commit such work before recording Gate 2 where you can; where you cannot, do not attribute it. When an `--attribute-commit` flips a passing Gate 2 from fresh to stale, the engine says so on stderr and names both ways out: re-record Gate 2 if the commit changed the implementation, or `--withdraw-commit <sha> --withdrawal-reason "<why>"` if it was bookkeeping.
 
 ### Every commit value is resolved when it is written (0.44.0)
 
@@ -365,7 +377,9 @@ conductor.mjs update-epic <id> --clear parent --clear external-url
 
 | Clearable | Consequence worth knowing before you do it |
 | --- | --- |
-| `parent` · `description` · `review-mode` · `external-updated-at` | None beyond the field going absent. |
+| `parent` · `description` · `external-updated-at` | None beyond the field going absent. |
+| `review-mode` · `verbosity` · `model` **(0.51.0)** | The epic stops carrying its own value and falls through to its lane's, then the repo-wide dial, which may be **higher or lower** than what it held — there is no de-escalation guard any more, so nothing complains either way. `profile --epic <id>` shows where the value now comes from. `--clear-model <role>` drops one role only. |
+| `spec-deltas-waived` **(0.51.0)** | The epic is reported again by `delivered-epic-spec-deltas-absent`; the clear is announced. |
 | `created-at` **(0.41.0)** | Returns the registration date to **absent**, which means UNKNOWN. The next `recover-created-at` will attempt it again from history — so clear-then-recover is the correction path for a date recovered wrongly. |
 | `external-url` | This is the **dedup key** the inward sync procedure matches on. Clear it and the linked item is mirrored again as a **new** epic on the next sync. It is also how a genuinely **reopened** tracker item is freed from the archived epic that still holds it (0.50.0), since one item maps to one epic on every write path. |
 | `external-id` | The epic stops being tracker-linked; `record-tracker-refresh` refuses it by name. |
@@ -390,7 +404,7 @@ conductor.mjs recover-created-at          # attempts it again from history
 
 `touchedAt` is deliberately **not** clearable, and its registry row says why: the engine re-stamps it on the next write that changes the record, so clearing it would be undone immediately and answers no question.
 
-**`--review-mode`** can escalate a single epic above the repo's bounded review dial (`off → standard → thorough`), but never de-escalate below it.
+**`--review-mode`** sets a single epic's own review value, above **or below** the lane's and the repo's (0.51.0): the effective value is resolved most-specific-wins, epic then lane then repo dial, and is not a maximum. The old escalate-only refusal is gone by decision; what replaces it is visibility — `profile --epic <id>` and `rules --epic <id>` name the layer each value came from and the higher value an epic lowers. See [`/pm:profile`](/commands/profile) and [`/pm:review-mode`](/commands/review-mode).
 
 ## Removing an epic
 
@@ -489,7 +503,7 @@ conductor.mjs record-gate-review <id> --gate 2 --verdict pass|fail \
     --reviewer "<identity>"
   ```
 
-  `--artifact` repeats. A **gate-2** pass still requires the sha pair, unchanged. Making the shas merely optional for Gate 1 was considered and rejected: a correct Gate 1 would then render `⚠ no checkable evidence`, which moves the wrong record one step along rather than repairing it. Paths are recorded bare, with no digest — nothing compares a Gate 1 digest today, and a digest with no comparator looks like staleness detection without being it.
+  `--artifact` repeats. A **gate-2** pass still requires the sha pair, unchanged. Making the shas merely optional for Gate 1 was considered and rejected: a correct Gate 1 would then render `⚠ no checkable evidence`, which moves the wrong record one step along rather than repairing it. Paths are recorded as given. **As of 0.51.0 (#198) a Gate 1 verdict also records a sha-256 of each artifact it could read, as `artifactDigests` beside the unchanged `artifacts` list** (Gate 1 only; Gate 2's evidence is its commit range). The engine computes it; no flag accepts one. Amend a reviewed artifact afterwards and the rendered Gate 1 cell reads `⚠ stale`; an artifact unreadable at record time gets no digest (said on stderr) and reads `⚠ unverifiable`; a verdict recorded before digests existed renders as it always did, never stale and never unverifiable. A live change's `tasks.md` is a progress ledger: it stays in the artifact list but is never digested, so ticking a checkbox does not stale the verdict. `/opsx:archive` moving the change under `archive/` is not an amendment, and Gate 1 staleness never blocks an archive (only Gate 2 does).
 </Note>
 
 `--base-sha`/`--head-sha` record the commit range the review actually covered, and `--reviewer` records who performed it — **as fields, not as prose in a note.** A review of `a..b` on an epic that later shipped `b..c` used to be byte-identical in `state.json` to one that covered everything; recorded as fields, the range is what later tells a covering verdict from a **stale** one.
