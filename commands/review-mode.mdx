@@ -69,7 +69,7 @@ The rules:
 
 ## When several changes are reviewed as one release candidate
 
-**New in 0.51.0.** Building a release from several changes, the budget applies **per candidate, not per change**: the converged review runs at the **highest** effective `review` among the candidate members (the members that are not archived and have built work), so one `thorough` member makes the whole candidate `thorough`. When members resolve to different levels, the procedure names each and recommends splitting the candidate by level. The whole procedure (batching, one integration branch, one capped review round, recording the same range as every member's Gate 2) is the shipped `release-candidate` skill; `release show` prints the derived `candidate review:` line, see [`/pm:status`](/commands/status#release-planning--release).
+**New in 0.51.0.** Building a release from several changes, the budget applies **per candidate, not per change**: the converged review runs at the **highest** effective `review` among the candidate members (the members that are not archived and have built work), so one `thorough` member makes the whole candidate `thorough`. When members resolve to different levels, the procedure names each and recommends splitting the candidate by level. The whole procedure (batching, one integration branch, one capped review round, recording the same range as every member's Gate 2) is the shipped `release-candidate` skill; `release show` prints the derived `candidate review:` line, see [`/pm:status`](/commands/status).
 
 ## Recording the verdict this dial asked for
 
