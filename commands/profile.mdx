@@ -8,7 +8,11 @@ icon: "sliders"
 The **execution profile** says how intensely to review, which model and effort each job role runs on, and how often you report. It is a pure instruction-layer setting: PM records it, resolves it and emits it into the rules block and the session brief. It never dispatches an agent or checks which model actually ran. Applying `{model, effort}` to a dispatch is your agent's job, where its platform supports it (and it should say so where it does not).
 
 <Info>
-  **New in 0.51.0.** `/pm:init` asks for the profile and recommends `opus` at `medium` effort for every role; see [`/pm:init`](/commands/init).
+  **New in 0.51.0.** `/pm:init` asks for the profile; see [`/pm:init`](/commands/init).
+</Info>
+
+<Info>
+  **Changed in 0.52.0.** There are now **six** job roles, and each has a built-in default model, so a repo that never set a model no longer reads "no model directive". `/pm:init` now recommends accepting the defaults, which records nothing.
 </Info>
 
 ## The three fields
@@ -16,12 +20,27 @@ The **execution profile** says how intensely to review, which model and effort e
 | Field | Values |
 | --- | --- |
 | `review` | `off`, `standard` or `thorough`: the reviewer budget (see [`/pm:review-mode`](/commands/review-mode)) |
-| `model` | Per job role (`implement`, `test` or `review`) a pair `{model, effort}`. `model` is `fable`, `opus`, `sonnet` or `haiku` (each means that family's latest release; `fable` is the top tier). `effort` is `low`, `medium`, `high`, `xhigh`, `max` or `ultracode`. **`haiku` takes no effort; every other model requires one.** |
+| `model` | Per job role (`plan`, `implement`, `test`, `review`, `mechanical` or `rudimentary`) a pair `{model, effort}`. `model` is `fable`, `opus`, `sonnet` or `haiku` (each means that family's latest release; `fable` is the top tier). `effort` is `low`, `medium`, `high`, `xhigh`, `max` or `ultracode`. **`haiku` takes no effort; every other model requires one.** |
 | `verbosity` | `quiet` (one completion message per epic) or `verbose` (a message at each phase transition and gate) |
 
 ## Where it is resolved from
 
-Each field resolves independently, most specific first: the **epic's own value**, else its **lane's**, else the **project's**, else the built-in default (`review: standard`, `verbosity: quiet`, no model directive). `model` resolves per role, and the `{model, effort}` pair is taken whole from the first layer that sets that role. An epic's `review` wins even where it is **lower** than the lane's or the project's. A stored value outside its list is ignored (and named by `profile`). A detour epic resolves from its own record and inherits nothing from the epic it paused.
+Each field resolves independently, most specific first: the **epic's own value**, else its **lane's**, else the **project's**, else the built-in default (`review: standard`, `verbosity: quiet`, and per role the model below). `model` resolves per role, and the `{model, effort}` pair is taken whole from the first layer that sets that role. An epic's `review` wins even where it is **lower** than the lane's or the project's. A stored value outside its list is ignored (and named by `profile`). A detour epic resolves from its own record and inherits nothing from the epic it paused.
+
+## The six roles and their defaults (0.52.0)
+
+| Role | Default `{model, effort}` |
+| --- | --- |
+| `plan` | `opus` (`high`) |
+| `implement` | `sonnet` (`medium`) |
+| `test` | `sonnet` (`low`) |
+| `review` | `opus` (`high`) |
+| `mechanical` | `sonnet` (`low`) |
+| `rudimentary` | `haiku` (`haiku` takes no effort) |
+
+A default is applied **at read time and never written to `state.json`**. `profile` reports it as source `default`, and unsetting a role falls back to it. To have a top-tier model build one epic straight off its finished plan, set `update-epic <id> --model implement=fable:<effort>`: an override of `implement`, not a seventh role.
+
+**Breaking, in emitted instructions only.** After `/pm:upgrade` the rules block names a default pair for every role. A repo's `state.json` does not change.
 
 ## Set the project or a lane
 

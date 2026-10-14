@@ -90,6 +90,8 @@
               "commands/tracker",
               "commands/review-mode",
               "commands/profile",
+              "commands/spend",
+              "commands/spend-guard",
               "commands/cross-spec-review",
               "commands/lane-routing",
               "commands/gate-guard",
