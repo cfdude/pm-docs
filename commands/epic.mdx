@@ -227,6 +227,16 @@ conductor.mjs add-epic --id <id> --title "<t>" --lane <lane> --priority <P> \
 
 `--add-story` repeats and works on `add-epic`, `add-many` (batch entries take a `stories` array), and `update-epic`.
 
+### Correcting a story recorded against the wrong index (0.52.0, gh#176)
+
+`--story <n>` is 1-indexed, while `stories[]` in `state.json` is a 0-indexed array, so reading a position off the file and passing it unchanged lands one story early.
+
+```bash
+conductor.mjs update-epic <id> --story <n> --correct-disposition "<why it was wrong>" [--done | --wont-do "<reason>"]
+```
+
+This reopens the story and keeps the original under `stories[n-1].corrections[]`; the call may carry `--done` or `--wont-do` to apply the right mutation at once. `--help` now renders `--story n, 1-indexed (NOT the 0-indexed stories[] position in state.json)`, and a successful `--story` write echoes the story it landed on. The replacement guard is unchanged, and its refusal names this path.
+
 ### Work that will not be done
 
 A checklist needs three states, not two: open, completed, and **deliberately not being done**.
@@ -436,6 +446,14 @@ conductor.mjs clear-active      # clears the active pointer
 ```
 
 `set-active` sets `.active = <id>` and the epic's `status: "active"` together, demoting any previously-active epic to `queued` — so the pointer and status can never disagree. It rejects an unknown or archived id. `update-epic <id> --status active` keeps them in sync too, and moving the active epic off `active` clears the pointer automatically.
+
+**The Gate 1 activation guard (0.52.0).** An openspec-lane epic may not be moved INTO `active` while its change is on disk (`openspec/changes/<id>/`) and it holds no passing Gate 1 (spec review) verdict: absent, failed or withdrawn. Doors: `set-active`, `update-epic --status active`, and `add-epic` / `add-many` creating at `active`; the refusal names `record-gate-review <id> --gate 1 …` and the deliberate way past it:
+
+```bash
+conductor.mjs update-epic <id> --status active --gate1-waived "<why>"
+```
+
+The reason is required, it is openspec-lane only, and one call waives and activates. Inverse: `--clear gate1-waived`. The guard finds the change by the epic's id or by the directory its `--plan` / `--spec` points into, and `update-epic` judges it against the lane the call sets. Not refused: an epic with no change on disk yet (activating it is how the change gets written), an epic already active, and a stale-but-passing Gate 1. `push-detour` and `pop-detour` warn instead of refusing. A stale Gate 1 is reported by `integrity` as `gate-1-verdict-stale`: it reuses the artifact-digest check behind the `⚠ stale` marking, names the changed artifact files and `record-gate-review <id> --gate 1 …` to re-record, prints its count line even at zero, and never refuses. A legacy verdict with no digests reads `⚠ unverifiable` and is not reported.
 
 **Moving the pointer off an epic that owes a reconcile warns and keeps the obligation (0.44.0).** Every verb that moves `.active` — `set-active`, `clear-active`, `update-epic`, `add-epic`/`add-many` creating an active epic, and `pop-detour` (off the detour) — prints this after its save; `push-detour` parking the epic is the one exemption. The guard blocks again as soon as the epic is active:
 

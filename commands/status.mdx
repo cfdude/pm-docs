@@ -317,3 +317,11 @@ LANE COUNTS
 TRACKER SYNC
   ◆ auth-overhaul — no externalId (consider /pm:sync)
 ```
+
+## The brief is capped, and what it costs (0.52.0)
+
+The SessionStart brief is capped at **16384 bytes**. It was uncapped and grew with a repository's history: 78,275 bytes, about 19.5K tokens, on pm's own repo. A brief under the cap is sent unchanged. Over it, only RELEASES (the 3 most recent), DISPOSITIONS, GATE REVIEWS, HANDOFFS and EPIC LINKS (the first 5 each) are bounded, each item line is trimmed to 240 characters and each list ends in `(+N more — see PROJECT.md "<section>")`; those lists move after every obligation block. Warnings and obligation blocks are never cut: if they alone exceed the cap they are sent whole and the marker says so. On pm's own record the brief is now 8,242 bytes. The PreCompact snapshot and PROJECT.md's "Briefing" are unchanged and uncapped.
+
+`render` (this command) and `upgrade` now end with two lines: the managed rules block as it sits on disk, and the SessionStart brief (bytes and estimated tokens, bytes/4). `rules --sections` prints the rules block's per-section sizes, ranked. The brief carries one `STOP: spend guard —` line for a stuck active epic; see [`/pm:spend-guard`](/commands/spend-guard).
+
+**Hooks drain their payload (0.52.0).** `brief` and `snapshot` read stdin first, and `gate-guard`, `lesson-advice` and `commit-nudge` do the same where they used to return before reading, so a payload past the pipe buffer (about 64 KiB) can no longer fail the writer with EPIPE. Allow and deny decisions are unchanged.
