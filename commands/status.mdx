@@ -99,6 +99,10 @@ conductor.mjs integrity
 
 `archive-directory-has-no-epic` also reports an archive directory the 0.50.0 date rule set aside, in the same words `sync` uses.
 
+### `attributed-commits-hold-duplicates` (0.53.0)
+
+Names an epic whose `attributedCommits` lists one commit more than once, written by an engine older than 0.52.0 (which made attribution once-only) or by hand. "The same commit" means equal spelling, or a short sha and the full name it abbreviates. In pm's own repository seven epics hold duplicates, the worst with 58 entries for 35 distinct commits. The finding names the epic, its entry and distinct-commit counts and the repeated commits, and **prints no remedy on purpose**: the gates read the set, and no verb removes one entry from the append-only array. A read of `state.json` that repairs nothing.
+
 ### `delivered-release-epic-left-open` — and the marker that settles it (0.51.0)
 
 A release carrying the **delivered marker** (`release <id> --deliver`, below) is delivered, full stop: every non-archived member not in its `deferred[]` is reported, `active` or not. A release with **no** marker keeps the member-derived reading (at least one member `delivered` and none `active` or `paused`, so a staged release in flight stays silent), and that finding now says the reading is inferred and prints `release <id> --deliver` as the way to replace the guess with the fact. That replaces the `--status active` workaround the check's earlier wording suggested. Archiving the last active member of a release that is still in flight no longer reads as the release being delivered.
@@ -323,5 +327,9 @@ TRACKER SYNC
 The SessionStart brief is capped at **16384 bytes**. It was uncapped and grew with a repository's history: 78,275 bytes, about 19.5K tokens, on pm's own repo. A brief under the cap is sent unchanged. Over it, only RELEASES (the 3 most recent), DISPOSITIONS, GATE REVIEWS, HANDOFFS and EPIC LINKS (the first 5 each) are bounded, each item line is trimmed to 240 characters and each list ends in `(+N more — see PROJECT.md "<section>")`; those lists move after every obligation block. Warnings and obligation blocks are never cut: if they alone exceed the cap they are sent whole and the marker says so. On pm's own record the brief is now 8,242 bytes. The PreCompact snapshot and PROJECT.md's "Briefing" are unchanged and uncapped.
 
 `render` (this command) and `upgrade` now end with two lines: the managed rules block as it sits on disk, and the SessionStart brief (bytes and estimated tokens, bytes/4). `rules --sections` prints the rules block's per-section sizes, ranked. The brief carries one `STOP: spend guard —` line for a stuck active epic; see [`/pm:spend-guard`](/commands/spend-guard).
+
+**A rejected lesson matcher is reported (0.53.0, #228).** The `lesson-advice` hook has to stay silent, so a repository whose own `detect:` was rejected was told nothing and its lesson simply never fired. The SessionStart briefing now carries `⚠ N lesson matcher(s) rejected — the lesson-advice hook never fires it/them; fix the detect: in docs/lessons/:` followed by `- <file>: <reason>` for up to five, and `(+N more in docs/lessons/)` past that. It is printed only when N is above zero, on the SessionStart context only (not in `PROJECT.md` or the PreCompact snapshot). No separate lint verb was added.
+
+**What pm injects, measured (0.53.0).** `overhead [--all-features] [--json]` reports every managed rules section, the brief, the PreCompact snapshot, each hook's text and the shipped command, skill and agent descriptions, each with its bytes, a `~N tokens (bytes/4, estimate)` figure and the feature that emits it. Read-only; see [`/pm:spend`](/commands/spend).
 
 **Hooks drain their payload (0.52.0).** `brief` and `snapshot` read stdin first, and `gate-guard`, `lesson-advice` and `commit-nudge` do the same where they used to return before reading, so a payload past the pipe buffer (about 64 KiB) can no longer fail the writer with EPIPE. Allow and deny decisions are unchanged.

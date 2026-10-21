@@ -71,6 +71,10 @@ git commit -m "chore(pm): stop tracking the conductor's session files"
 
 Run it from the project root. `--cached` removes the files from git only; they stay on disk. pm never runs it itself. The block repeats on every `upgrade` until the files are untracked, and is silent wherever git cannot answer (no repository, or no index). There is no `state.json` change and no migration.
 
+## What 0.53.0 changes — rules-block text, no migration
+
+Run `/reload-plugins` after updating, then `/pm:upgrade` in each repo. The managed rules block changes in two ways: shipped instructions no longer pin an OpenSpec change to `openspec/changes/<id>/` (they name the directory as OpenSpec reports it, via `changeRoot` in `openspec status --change <id> --json`, and state the stock path as a default), and the `## Spend guard` section now follows whether a limit is live. There is **no `state.json` schema change**, so no migration runs: the newest `MIGRATIONS` entry is still 0.44.0, and every field the release adds (`epic.sessions`, an epic's recorded decisions, `state.devLog`, a spend-guard `tokenBasis`) is optional. `devLog` is listed among the opt-ins not adopted; neither `init` nor `upgrade` turns it on.
+
 ## What 0.52.0 changes — rules-block text and a capped brief, no migration
 
 0.52.0 ships **no `state.json` schema change and no migration**: the newest `MIGRATIONS` entry is still 0.44.0, and every field the release adds (`state.spendTracking`, `epic.gateRounds`, the spend-guard limits, `gate1Waived`, a story's `corrections[]`) is optional. It does change what the rules block says and how large the SessionStart brief is, so `/pm:upgrade` is still the step that delivers it: the managed rules block now names the six role defaults (see [`/pm:profile`](/commands/profile)), plus the spend and spend-guard sections **only while those are on**, and the brief it sends is capped (see [`/pm:status`](/commands/status)). Run `/reload-plugins` first, then `/pm:upgrade` in each repo.

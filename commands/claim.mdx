@@ -28,6 +28,14 @@ An advisory marker nobody honours is worse than none, because it _looks_ like co
 
 **The epic id is the one positional, and it may come after the flags (0.44.0).** `--steal` and `--repo` take no value, so `claim --steal e1 --session s2` claims `e1`. `--id e1` in its place is diagnosed with the line you meant. A token that only looks like a flag is refused rather than skipped — `claim --repo --session s --Steal` used to record the repo claim, and now prints `conductor: unknown flag --Steal for claim — it accepts: --session, --ttl, --steal, --repo, --force`. `--force` belongs to the state write, not to the claim, and does not override a live claim — that is `--steal`.
 
+## Which sessions wrote an epic — `--session` is not only for `claim` (0.53.0)
+
+`--session <name>` (fallback `PM_SESSION`) used to be declared for `claim` and `unclaim` only. It is now accepted on **every verb whose save can change an epic** (`add-epic`, `update-epic`, `set-active`, `claim`, `unclaim`, `record-decision`, `set-spend-guard` and the rest; each verb's `--help` lists it). Read-only verbs do not take it.
+
+When a save changes an epic and an identity resolves, the same write appends it to `epic.sessions`: one `{session, firstAt, lastAt}` entry per distinct name, in first-seen order, with only `lastAt` moving on a later write. It says which sessions wrote the record, not who did the work. No identity, no field; a write that changes nothing records nothing; a hook's save never stamps. `sessions` is engine-written history with no clear, and no migration runs.
+
+**Behaviour change.** The identity is now validated for every non-hook verb before any write: non-blank, at most 128 characters, no control character. A `claim` whose name carries a control character, which used to be stored, is now refused.
+
 ## What expires a claim
 
 A **stated TTL**, carried on the record — not a heartbeat.
