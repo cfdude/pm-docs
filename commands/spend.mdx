@@ -76,7 +76,7 @@ window would credit them to whichever epic the orchestrator last activated.
 
 While tracking is on, the rules block tells you to begin every sub-agent dispatch prompt with one line:
 
-```
+```text
 pm-spend: epic=<id> role=<role> phase=<phase> [round=<n>]
 ```
 
@@ -90,6 +90,8 @@ The engine reads the first such line of a sub-agent's first user entry, once, an
 tokens. A marker naming a role or phase outside those lists, or a round that is not a positive
 integer, is `invalid-marker`; one naming an epic that is not registered (now) is `unknown-epic`.
 
+**Invalid markers are named (0.53.0).** Before, a refused marker surfaced only as tokens under `invalid-marker`. The text report now prints one line per distinct `(field, value)` (the first failing field, in the order role, phase, round) with the accepted set, the agent count and the tokens, and `--json` carries `unattributed.invalidMarkers`. In pm's own repository, 24.5M tokens (17% of a 141.2M ledger) were dispatched with `phase=spec` or `phase=gate-1` and went unseen until attribution read 68.1%. Validation stays strict: no alias is accepted, so use one of the five phases above.
+
 ## The report
 
 `spend` ingests (unless `--no-ingest`, tracking is off, or the main tree's HEAD is detached), then
@@ -98,14 +100,55 @@ the **unattributed total by reason** and a **coverage share**. The unattributed 
 when it is 0: spend that was not measured must never look like spend that did not happen.
 `--epic`, `--since` and `--until` (half-open: `since <= at < until`) narrow what is summed.
 
-`--json` prints one object — `tracking`, `ingest`, `epics`, `unattributed`, `coverage`, `cost`. Every
-totals object holds `input`, `cacheCreation`, `cacheRead`, `output`, `total` (the four summed, nothing
-else) and `messages`. `epics.<id>` holds `totals`, `byActor`, `byRole`, `byPhase`, `byRound`, `byTier`,
-`firstAt`, `lastAt` and `agents.<agentId>` (`role`, `phase`, `round`, `tier`, `totals`).
+`--json` prints one object — `tracking`, `ingest`, `epics`, `unattributed`, `coverage`, `cost`. Every totals object holds `input`, `cacheCreation`, `cacheRead`, `output`, `total` (the four summed, nothing else), `work` (0.53.0: `input + cacheCreation + output`, which leaves `cacheRead` out, and the one definition every consumer reads) and `messages`. `epics.<id>` holds `totals`, `byActor`, `byRole`, `byPhase`, `byRound`, `byTier`, `firstAt`, `lastAt` and `agents.<agentId>` (`role`, `phase`, `round`, `tier`, `totals`).
 
 **No cost is computed.** pm ships no price table: a hardcoded per-token price is an invented number
 that goes stale silently. Tokens are the measure, and Claude Code's own cost figures are notional
 under subscription auth.
+
+## Reading the ledger as a postmortem (0.53.0)
+
+Four read-side verbs sit on top of the ledger. All need spend tracking, none calls a model or opens a network connection, and none turns tracking on.
+
+### `spend-analysis`
+
+```bash
+conductor.mjs spend-analysis [--epic <id> | --release <id>] [--json] [--no-ingest]
+```
+
+Where the tokens went, which agents are outliers, and what to change. It keeps `input`, `cache-write`, `cache-read`, `output`, `work` and `total` apart, split by actor, model tier, role and phase, ranks sub-agents by `work` with `total` beside it, gives the unattributed reasons and coverage their own section, and counts tool use per tool name (messages that called the tool, never a token figure). There is no money cost. It writes nothing to `state.json`.
+
+Six outlier rules each print their evidence, threshold and one rule-rendered recommendation: `long-context-agent` (at least 100 messages and 200,000 mean context per message), `dominant-agent` (at least 50% of an epic's work, on an epic with 2 or more agents), `tier-mismatch`, `review-loop` (3 or more distinct review rounds), `low-coverage` (under 90%) and `invalid-markers`. Every threshold is a named constant labelled a proposal, not a measurement. A cross-release trend gives mean `work` per epic and a `growing`, `falling` or `flat` verdict (a 20% band) only when two releases each hold at least 3 epics with attributed rows; otherwise it says `insufficient data`.
+
+### `record-decision` and `decisions`
+
+```bash
+conductor.mjs record-decision <epic> --what "<decision>" --why "<why>" --since <iso> [--until <iso>] [--alternative "<alt>"]... [--phase plan|build|review|docs|release] [--session <name>]
+conductor.mjs record-decision <epic> --withdraw <n> --reason "<why>"
+conductor.mjs decisions <epic> [--json] [--no-ingest]
+```
+
+A numbered decision (per epic, from 1, never reused) carries `what`, `why`, one `--alternative` per alternative, a `--phase`, and the window of work that reached it (`--since` to `--until`, the record time by default). Recording is refused while tracking is off; an archived epic accepts one. `--withdraw <n> --reason` marks a decision withdrawn and keeps it.
+
+A decision's cost is computed when read and never typed or stored: the `work` and `total` the ledger attributes to the epic inside its window, plus that window's coverage share. It is the epic's spend in the window, not spend the decision caused, and overlapping windows are not summed. `spend-analysis --epic <id>` carries the same section.
+
+### `overhead`
+
+```bash
+conductor.mjs overhead [--all-features] [--json]
+```
+
+What pm injects into a session, by surface and by feature: every managed rules section, the SessionStart brief, the PreCompact snapshot, each hook's text and the shipped command, skill and agent descriptions, each with its bytes, a `~N tokens (bytes/4, estimate)` figure and the one feature that emits it. `--all-features` computes the every-opt-in-on case in memory and writes nothing. It is read-only and claims no downstream saving. The README's "What each feature costs" table is held by a test to the same surface map.
+
+### `set-dev-log` and `dev-log`
+
+```bash
+conductor.mjs set-dev-log on|off
+conductor.mjs dev-log [--session-id <id>] [--since <iso>] [--until <iso>] [--json] [--no-ingest]
+conductor.mjs dev-log --clear [--yes]
+```
+
+A developer-only session log, **off by default**; `init` and `upgrade` never turn it on and list `devLog` among the opt-ins not adopted. `on` is refused while spend tracking is off, in a linked worktree, or on a detached main HEAD. While both are on, `spend`'s ingest (and `spend-guard`'s) appends one composition entry per assistant message to `.conductor/spend/devlog.jsonl`: byte counts only (user text, tool results per tool name, attachments, an image count, the response's text and thinking) and identifiers, never any text. `dev-log` reports per Claude Code session the message count, times, token classes and `work`, the byte composition, the features snapshot in force, and three retention warnings, each printed with its evidence and a proposed threshold: `stale-session` (at least 7 days), `large-context` (a message with at least 300,000 tokens of context) and `compacted`.
 
 ## Every write has an inverse
 
@@ -116,6 +159,8 @@ under subscription auth.
 | rows lost or corrupt | `spend --rebuild --yes` — re-derives from the transcripts still on disk |
 | the timeline | `spend --clear --timeline --yes` — the timeline cannot be rebuilt, so it is never removed implicitly |
 | the rules-block section | `set-spend-tracking off` re-renders the block without it |
+| `set-dev-log on` | `set-dev-log off` stops capture and deletes nothing; `dev-log --clear` removes only `devlog.jsonl` (plan first, `--yes` to apply) |
+| `record-decision` | `record-decision <epic> --withdraw <n> --reason` marks it withdrawn and keeps it |
 
 Without `--yes`, `--clear` and `--rebuild` print their plan and change nothing (this engine is driven by
 agents and hooks, so a prompt on stdin would hang rather than confirm). `--clear --timeline` says that

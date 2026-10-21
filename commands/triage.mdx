@@ -28,6 +28,16 @@ conductor.mjs triage "--story <n> is 1-indexed but --help says only '<a value>'"
 
 Quote the ask: it is ONE argument, and a second unquoted word is refused as an extra argument rather than silently dropped (0.44.0). It may stand before or after `--limit` — `triage --limit 3 "fix the render stamp"` reads the ask — while `triage --limit 5` with no ask still prints usage. A quoted ask that begins with `--` but is not shaped like a flag (`"--story <n> is 1-indexed"`) is the ask, not a flag.
 
+## Which epics exist — `list` (0.53.0)
+
+Intake, the tracker-sync dedup and a disposition's `--deferral "<epicId>:<section>"` all need the set of epics, and the engine had no verb for it: agents were told to run an `epic list` that did not exist and fell back to reading `.conductor/state.json` and guessing its shape (#204).
+
+```bash
+conductor.mjs list [--status <status>] [--lane <lane>] [--linked-to <epicId>] [--json]
+```
+
+It prints one line per epic, or `{count, epics}` with `--json`. `--status` takes `untriaged`, `queued`, `active`, `paused`, `later`, `blocked`, `planned` or `archived`; `--lane` takes one of the five lanes. `--linked-to` is **incoming**: the epics carrying a link to that id, which is the deferral-list question. Read-only. It filters fields; `triage` reads an ask.
+
 ## The engine computes candidates and never a verdict
 
 This is the line the whole design turns on, and the command states it in its own output: **`verdict` is always `null`.**

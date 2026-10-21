@@ -25,7 +25,17 @@ conductor.mjs log-detour "<what you fixed>"
 
 This appends a timestamped line plus the current commit SHA to `.conductor/detours.log`. Then resume the paused work as normal.
 
-**Quote the text (0.44.0).** The log is append-only, so the engine refuses a line it would record wrong rather than writing it: an unquoted word shaped like a flag is refused (`log-detour fixed --no-verify usage` → `conductor: unknown flag --no-verify for log-detour — it accepts: --force`, then `If '--no-verify' is part of the text, quote the whole value.`), and `--help` anywhere after the verb prints help instead of appending. `--force` is never part of the text: `log-detour fixed it --force` records `fixed it`.
+**Record it against the right commit — `--sha` (0.53.0, #239).** Without a flag the row is keyed to HEAD. A commit blocked by a format hook leaves HEAD on the previous commit, so a `log-detour` run in the same shell step recorded against the wrong one, and the wrong row was permanent. `log-detour --sha <sha> "<what you fixed>"` records against the named commit instead, and is refused, writing nothing, when the sha names no commit in this repository. Without `--sha`, when HEAD already carries a visible MINIMAL row the command says so after writing and names the repair.
+
+**Taking a MINIMAL row back — `retract-detour --minimal` (0.53.0).** The inverse for a MINIMAL row:
+
+```bash
+conductor.mjs retract-detour <sha> --minimal "<exact description>" --reason "<why>"
+```
+
+It appends a `RETRACTED-MINIMAL` row naming that one row's timestamp, hides only that row from `PROJECT.md`, keeps it in `.conductor/detours.log`, and leaves the commit's `AUTO-DETOUR` and `DETOUR-COMMIT` rows alone. An engine older than 0.53.0 shows the `RETRACTED-MINIMAL` row itself in `PROJECT.md`. Without `--minimal`, a MINIMAL-only row is still refused as a declaration, not retractable. There is no un-retract; re-declare with `log-detour`.
+
+**Quote the text (0.44.0).** The log is append-only, so the engine refuses a line it would record wrong rather than writing it: an unquoted word shaped like a flag is refused (`log-detour fixed --no-verify usage` → `conductor: unknown flag --no-verify for log-detour — it accepts: --force`, then `If '--no-verify' is part of the text, quote the whole value.`), and `--help` anywhere after the verb prints help instead of appending. (`log-detour` was flagless before 0.53.0 and now also accepts `--sha`, so its accepted-flag list reads `--sha, --force`.) `--force` is never part of the text: `log-detour fixed it --force` records `fixed it`.
 
 If you invoke `/pm:detour --minimal "<what>"`, PM takes exactly this path and stops — no classification prompt, no push.
 
