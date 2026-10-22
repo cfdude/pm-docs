@@ -53,3 +53,5 @@ Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/sett
 
 ### Resources
 - [Mintlify documentation](https://mintlify.com/docs)
+
+<!-- Test PR to confirm CodeRabbit applies cfdude/coderabbit/.coderabbit.yaml. Close without merging. -->
