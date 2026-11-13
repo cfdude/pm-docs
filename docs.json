@@ -81,7 +81,8 @@
               "commands/detour",
               "commands/resume",
               "commands/hierarchy",
-              "commands/changesets"
+              "commands/changesets",
+              "commands/backlog-grooming"
             ]
           },
           {
@@ -97,6 +98,10 @@
               "commands/gate-guard",
               "commands/claim",
               "commands/activity",
+              "commands/boards",
+              "commands/mission",
+              "commands/release-plan",
+              "commands/set-project",
               "commands/feedback"
             ]
           }
