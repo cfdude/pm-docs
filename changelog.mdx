@@ -8,10 +8,10 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
 
 ---
 
-<Update label="0.55.0" description="2026-11-12">`
+<Update label="0.55.0" description="2026-11-12">
   ## Project boards, and a record that is harder to get wrong
 
-  Project boards, and a record that is harder to get wrong. This release adds the boards (a read-only `board --json` snapshot, a mission and release plan, a project name and key with a number on every epic, and two published pages that draw the backlog and the release plan, on by default with one switch to remove them), plus a run of fixes to what the engine refuses, announces and carries in the rules block. 0.54.0 was never released: it was planned, then retired, and its delivered work is included here, so there is no 0.54.0 version and no 0.54.0 entry. Run `/reload-plugins` after updating, then `/pm:upgrade` in each repo: the managed rules block changes, `upgrade` numbers every epic that has no `number` (the one `MIGRATIONS` entry in this release, keyed to 0.55.0), and the boards are on by default, so tell your user.
+  This release adds the boards (a read-only `board --json` snapshot, a mission and release plan, a project name and key with a number on every epic, and two published pages that draw the backlog and the release plan, on by default with one switch to remove them), plus a run of fixes to what the engine refuses, announces and carries in the rules block. 0.54.0 was never released: it was planned, then retired, and its delivered work is included here, so there is no 0.54.0 version and no 0.54.0 entry. Run `/reload-plugins` after updating, then `/pm:upgrade` in each repo: the managed rules block changes, `upgrade` numbers every epic that has no `number` (the one `MIGRATIONS` entry in this release, keyed to 0.55.0), and the boards are on by default, so tell your user.
 
   ### Added
 
@@ -138,7 +138,7 @@ All notable changes to the `pm` plugin, mirroring [CHANGELOG.md](https://github.
   - **NEXT UP lists a queued openspec epic whose change is not on disk yet.** The brief used to drop it, so a P1 that PROJECT.md showed with "no change on disk" was missing from the one list re-injected every session. It now appears in priority order, marked `⚠ no change on disk — needs /opsx:propose`. The lanes rollup still counts only epics whose change exists, and is not printed when it would be empty.
   - **`record-gate-review --artifact <directory>` now records a digest, so a Gate 1 over an OpenSpec change directory can go stale.** A directory used to record nothing and every such verdict read `⚠ unverifiable` for good. The engine now digests a directory recursively over its files in sorted order (a change's top-level `tasks.md` progress ledger stays exempt, `.DS_Store` is ignored, symlinks are not followed), so adding, removing, renaming or editing any file under it reads `⚠ stale`. A directory with no digestable file still records no digest and says so. The archive move of a directory artifact is still not staleness. File artifacts are unchanged, and a verdict recorded before this release still loads and still reads `unverifiable`.
   - **A platform switch now removes the previous platform's managed rules block.** `writeRules()` used to write only the new platform's file, leaving the old file's block live but never refreshed again -- stale instructions an agent could still read. After writing the new target, the engine now removes the one well-formed block from any other file in a platform's rules chain (`CLAUDE.md`, `AGENTS.md`, `HERMES.md`), keeps every byte outside the marker lines, deletes a file left holding only pm's own header, and says so on stderr. A file with an ambiguous marker arrangement is never touched, and platforms that share a file (Hermes resolving to `CLAUDE.md`) leave it alone.
-`</Update>`
+</Update>
 
 <Update label="0.53.0" description="2026-10-21">
   ## Know where the tokens went, and keep the record honest
