@@ -1,0 +1,31 @@
+---
+title: "release — Release Plan Fields and the We-Are-Here Marker"
+sidebarTitle: "Release plan"
+description: "Record a release theme, rationale, exit line, order and size, mark where the project is, and clear a target."
+---
+
+The release plan board draws each release from fields you record on the release itself. Membership, deferrals, `--deliver` and `release show` are described in [`/pm:status`](/commands/status); this page covers what 0.55.0 adds.
+
+```bash
+conductor.mjs release <id> --theme "<one line>" --rationale "<one line>" --exit "<one line>" --order <n> --size major|minor|patch
+conductor.mjs release <id> --clear theme|rationale|exit|order|size|target
+conductor.mjs release here <id> [--text "<where we are>"] [--next "<what is next>"]
+conductor.mjs release here --clear-here
+```
+
+| Flag | Effect | Its inverse |
+| --- | --- | --- |
+| `--theme`, `--rationale` | one line each, at most 400 characters | `--clear theme`, `--clear rationale` |
+| `--exit` | the release's exit line, one line, at most 400 characters | `--clear exit` |
+| `--order <n>` | a non-negative integer; releases are listed by `order`, then id, unordered last. It is also how a release is judged at or before the mission milestone | `--clear order` |
+| `--size major\|minor\|patch` | the size of the release | `--clear size` |
+| `--target` | the target date | `--clear target` (new in 0.55.0, the inverse of `--target`) |
+| `release here <id>` | records where the project is, with optional `--text` and `--next` | `release here --clear-here` |
+
+A release's status (`planned`, `in-progress` or `shipped`) is **derived** from `--deliver` and its members and is never stored, so there is no `--status` flag. `here` is a reserved release id, like `show`.
+
+`release show` prints the plan fields and marks the release `(here)`. The `render` verb ([`/pm:status`](/commands/status)) prints a `here:` line and, once a [mission milestone](/commands/mission) exists, `(critical path)` marks. `PROJECT.md` and the SessionStart brief carry neither. `release --help` and its missing-id usage name `release here`, the plan fields and the clearable fields.
+
+## How the release plan board uses them
+
+The release plan board reads the mission and "we are here" as one header with the plan line, keeps only in-progress and planned releases in its roadmap, and lists shipped releases in a Shipped table at the bottom, with "N of M shipped" and, for a release that did not ship everything, what did not ship and the recorded reason. `board --json` carries that as each release's derived `unshipped` array. See [`/pm:boards`](/commands/boards).
