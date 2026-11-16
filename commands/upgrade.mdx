@@ -71,6 +71,12 @@ git commit -m "chore(pm): stop tracking the conductor's session files"
 
 Run it from the project root. `--cached` removes the files from git only; they stay on disk. pm never runs it itself. The block repeats on every `upgrade` until the files are untracked, and is silent wherever git cannot answer (no repository, or no index). There is no `state.json` change and no migration.
 
+## What 0.55.0 changes — one migration, and the boards are on
+
+Run `/reload-plugins` after updating, then `/pm:upgrade` in each repo. The managed rules block changes, and one `MIGRATIONS` entry (keyed to 0.55.0) runs: `upgrade` gives every epic that has no `number` one, tracker-linked epics by their issue number first, then the rest from a counter that starts at 1000, in registration order. A backfilled number is not a touch. See [`/pm:set-project`](/commands/set-project).
+
+The boards are **on by default**. `upgrade` prints `boards: on (default)` and, once, on the upgrade that crosses 0.55.0, a line telling the agent to tell you so. `set-boards off` removes them; see [`/pm:boards`](/commands/boards). What the rules block gains is listed under [CLAUDE.md rules block](/concepts/state-and-project#claude-md-rules-block).
+
 ## What 0.53.0 changes — rules-block text, no migration
 
 Run `/reload-plugins` after updating, then `/pm:upgrade` in each repo. The managed rules block changes in two ways: shipped instructions no longer pin an OpenSpec change to `openspec/changes/<id>/` (they name the directory as OpenSpec reports it, via `changeRoot` in `openspec status --change <id> --json`, and state the stock path as a default), and the `## Spend guard` section now follows whether a limit is live. There is **no `state.json` schema change**, so no migration runs: the newest `MIGRATIONS` entry is still 0.44.0, and every field the release adds (`epic.sessions`, an epic's recorded decisions, `state.devLog`, a spend-guard `tokenBasis`) is optional. `devLog` is listed among the opt-ins not adopted; neither `init` nor `upgrade` turns it on.

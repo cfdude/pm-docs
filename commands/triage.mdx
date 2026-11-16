@@ -28,6 +28,29 @@ conductor.mjs triage "--story <n> is 1-indexed but --help says only '<a value>'"
 
 Quote the ask: it is ONE argument, and a second unquoted word is refused as an extra argument rather than silently dropped (0.44.0). It may stand before or after `--limit` — `triage --limit 3 "fix the render stamp"` reads the ask — while `triage --limit 5` with no ask still prints usage. A quoted ask that begins with `--` but is not shaped like a flag (`"--story <n> is 1-indexed"`) is the ask, not a flag.
 
+## An ask that starts with a dash, and the open releases (0.55.0)
+
+An ask shaped like a flag cannot be passed positionally. Say it with `--ask=`, exactly as `suggest-lane --ask=` does:
+
+```bash
+conductor.mjs triage --ask='--limit=5 is ignored by triage'
+```
+
+Give the ask positionally or with `--ask=`, never both: the second is refused as an extra argument.
+
+The output now carries the releases beside the candidates:
+
+- **`release`** (on each candidate) is the id of the release that epic is a member of, or `null`.
+- **`releases`** lists every **open** release with its `id`, `intent`, `memberCount` and the `sharedTokens` its id and intent share with the ask, ranked by how many. A release with no delivered marker whose members are all archived is history and is not listed; one with no members yet is a fresh intent and is. A release sharing nothing is still listed, because an intent worth reading is not always lexically close to the ask.
+
+```json
+"releases": [
+  { "id": "0.54.0", "intent": "Make link validation stricter", "memberCount": 6, "sharedTokens": ["link"] }
+]
+```
+
+`verdict` is still always `null`. Whether the ask serves a release, and whether to `release <id> --member` it, is your call; the engine only shows them. An ask that names a version ("0.54.0") does not match a release by its id, because version ids are shorter than the three-character word minimum, so only the intent's words are compared.
+
 ## Which epics exist — `list` (0.53.0)
 
 Intake, the tracker-sync dedup and a disposition's `--deferral "<epicId>:<section>"` all need the set of epics, and the engine had no verb for it: agents were told to run an `epic list` that did not exist and fell back to reading `.conductor/state.json` and guessing its shape (#204).
