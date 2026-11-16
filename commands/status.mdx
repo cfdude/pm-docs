@@ -255,6 +255,21 @@ conductor.mjs release show 0.27.0
 - **An exclusion is not an ending.** A deferred epic keeps its status and gets no disposition of its own — it stays in the backlog because it is still work someone may do. What it loses is membership of that release.
 - **Re-deferring with a NEW reason keeps the old one (0.50.0).** `deferred[]` holds the current reason, and `{op: "redefer", reason, was, wasRecordedAt}` goes to the release's `amendments[]`, where `release show` renders both. The same reason again writes nothing.
 
+### Plan fields and "we are here" (0.55.0)
+
+```bash
+conductor.mjs release 0.55.0 --theme "<line>" --rationale "<line>" --exit "<runnable check>" --order <n> --size major|minor|patch
+conductor.mjs release 0.55.0 --clear theme --clear target
+conductor.mjs release here 0.55.0 --text "<line>" --next "<line>"
+conductor.mjs release here --clear-here
+```
+
+- **Each text field is one line of at most 400 characters; `--order` is a non-negative integer.** `--clear <field>` is repeatable and removes `theme`, `rationale`, `exit`, `order`, `size` or `target` (`--clear target` is the inverse of `--target`).
+- **A release's status is never stored.** `planned`, `in-progress` or `shipped` is derived from `--deliver` and the members, so `--status` is not a flag.
+- **`here` is a reserved release id.** `release here` records where the project is and `--clear-here` removes it. `release show` marks that release `(here)`, and `render` (this command) prints a `here:` line.
+- **Critical path.** Once a mission milestone exists (see [`/pm:mission`](/commands/mission)), `release show` and `render` mark the releases at or before it, by `--order`, `(critical path)`. `PROJECT.md` and the brief carry neither mark.
+- `release --help` names every one of these verbs. The plan is drawn by [`/pm:boards`](/commands/boards) and read as JSON by `board --json`.
+
 ### Recording that a release shipped — `--deliver`, and its inverse `--undeliver` (0.51.0)
 
 - `--deliver` sets `release.delivered = {recordedAt}`. It is a marker, not a judgment, so no reason is demanded. `integrity`'s `delivered-release-epic-left-open` reads it instead of guessing from the members. Marking an already-marked release changes nothing.
