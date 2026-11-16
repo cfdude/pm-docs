@@ -216,6 +216,21 @@ conductor: --attribute-commit value "not-a-commit" does not resolve to exactly o
   **Never attribute the commit that moves `openspec/changes/<id>/` under `archive/`**, or any commit that only relocates or deletes a change's artifacts. That move lands after the reviewed range by construction, so attributing it makes the epic's own Gate 2 stale at the instant the archive gate reads it.
 </Warning>
 
+## Planning fields and the challenge (0.56.0)
+
+`add-epic`, `update-epic` and `add-many` (as batch keys) take these. Each scalar is cleared with `--clear <field>`.
+
+| Flag | Effect |
+| --- | --- |
+| `--initiative <id>` | the epic's one primary [initiative](/commands/initiative), which must be recorded. A new primary stamps `initiativeJoinedAt`; re-setting the same value keeps it. `--clear initiative` removes both |
+| `--secondary-initiative <id>` | an initiative the epic also serves. Repeatable, a repeat is ignored, one equal to the primary is refused. Inverse: `--remove-secondary-initiative <id>` |
+| `--kind initiative-work\|health` | what the epic is for. Health is bugs, security fixes, dependency and stack upgrades, deprecation work, and test and tooling debt, never new internal capability. A [release's 80/20 report](/commands/release-plan) counts members by it |
+| `--off-mission-reason "<line>"` | the recorded answer to "does this serve the mission?", at most 300 characters |
+| `--off-initiative-reason "<line>"` | the recorded answer to "does this serve its release's initiative?". It silences the warning below and leaves the epic counted `unaligned` |
+| `--add-non-goal "<line>"` | something this epic will not do (`add-many` reads a `nonGoals` array). Inverse: `--remove-non-goal "nN:<why>"` |
+
+**The challenge.** While an initiative is open, an epic leaving `untriaged` with no kind, no initiative and no recorded reason gets one stderr warning that names `--kind` and, unless the kind is `health`, `--initiative`. It is never a refusal and the write lands. `claude-code` epics are exempt, and a recorded `--off-initiative-reason` silences it. `release --member` warns once for an epic that does not serve the release's primary initiative, and never for a maintenance release or one with no purpose.
+
 ## Stories, and the third state a checklist needs
 
 Stories are inline progress on an epic. **As of 0.50.0 they count together with the epic's task source** (a plan file, or an openspec change's `tasks.md`) — neither hides the other. As of 0.31.0 they can be created **atomically**, so an epic arrives with its milestones instead of acquiring them one call at a time:

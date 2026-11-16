@@ -1,0 +1,39 @@
+---
+title: "initiative — Multi-Release Efforts and Their Milestones"
+sidebarTitle: "Initiative"
+description: "Record an initiative, its initiative milestones and non-goals; read them back with initiative show."
+---
+
+An **initiative** is a multi-release effort that delivers one valuable capability. It sits between the mission and the releases: Mission, Initiative, Milestone, Release, Epic. The engine never writes an initiative it was not given: it stores what a person or an agent says one is, with where it came from, and it is never deleted. Ending one records a disposition.
+
+```bash
+conductor.mjs initiative <id> --title "<line>" --capability "<line>" [--source "<line>"]
+conductor.mjs initiative show [<id>] [--history]
+```
+
+## Vocabulary: two different milestones
+
+| Term | What it is | Where it lives |
+| --- | --- | --- |
+| **Mission milestone** | the one release that meets the mission. Releases at or before it, by `--order`, are critical path | `mission --milestone <releaseId>` |
+| **Initiative milestone** | a notable achievement inside one initiative, with a stable id (`m1`, `m2`, ...), reached with one line of evidence. It carries no release | `initiative <id> --add-milestone "<line>"` |
+
+A plan's story milestones are a third, unrelated thing. Every surface says "mission milestone" or "initiative milestone", never a bare "milestone".
+
+## Operations
+
+| Operation | Effect | Its inverse |
+| --- | --- | --- |
+| `<id> --title "<line>" --capability "<line>"` | creates the initiative (both required; `show` is reserved). On an existing id either flag replaces its value. Title at most 200 characters, capability at most 400 | a new value |
+| `--source "<line>"` | where it was derived from, at most 300 characters. `UNGROUNDED` is accepted when it could not be grounded | `--clear source` |
+| `--off-mission-reason "<line>"` | the recorded answer to "does this serve the mission?", challenged once | `--clear off-mission-reason` |
+| `--add-milestone "<line>"` | appends an initiative milestone, ids never reused | `--remove-milestone "mN:<why>"` (marks it removed, keeps it) |
+| `--reach-milestone "mN:<evidence>"` | records it reached, with time and evidence | `--unreach-milestone "mN:<why>"` (both events kept) |
+| `--add-non-goal "<line>"` | something this initiative will not do (repeatable) | `--remove-non-goal "nN:<why>"` |
+| `--end --outcome delivered\|abandoned\|superseded --reason "<why>"` | ends it and appends the event to history | `--reopen --reason "<why>"` |
+
+`mN:<why>` and `nN:<why>` split at the first colon and are not repeatable. Every refusal writes nothing. `initiative show` lists every initiative (`no initiatives` when none); `initiative show <id>` prints every field, and `--history` adds lifecycle events and removed milestones and non-goals. `show` writes nothing.
+
+While an initiative is open, the managed rules block carries a short `## Initiatives` section (at most 280 bytes) naming the challenge-once rule. `integrity` reports an epic or release naming an initiative the record does not hold (`dangling-initiative-reference`).
+
+See [`mission`](/commands/mission) for the mission and its non-goals, [`release`](/commands/release-plan) for a release's primary initiative and the 80/20 report, and [`epic`](/commands/epic) for the epic planning fields.

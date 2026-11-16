@@ -100,6 +100,7 @@
               "commands/activity",
               "commands/boards",
               "commands/mission",
+              "commands/initiative",
               "commands/release-plan",
               "commands/set-project",
               "commands/feedback"
