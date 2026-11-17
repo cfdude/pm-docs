@@ -20,13 +20,24 @@ conductor.mjs release here --clear-here
 | `--order <n>` | a non-negative integer; releases are listed by `order`, then id, unordered last. It is also how a release is judged at or before the mission milestone | `--clear order` |
 | `--size major\|minor\|patch` | the size of the release | `--clear size` |
 | `--target` | the target date | `--clear target` (new in 0.55.0, the inverse of `--target`) |
+| `--initiative <id>` / `--maintenance` | the release's purpose: its primary [initiative](/commands/initiative), or `--maintenance` to declare it serves none. Each replaces the other; both together are refused; `release here` refuses all three. The release goal is the existing `--theme` | `--clear-initiative` (removes either) |
+| `--split-reason "<line>"` | why the release departs from the 80/20 split, at most 400 characters. It changes neither the split nor `drift` | `--clear-split-reason` |
+| `--add-non-goal "<line>"` | something this release will not do (repeatable) | `--remove-non-goal "nN:<why>"` |
 | `release here <id>` | records where the project is, with optional `--text` and `--next` | `release here --clear-here` |
 
 A release's status (`planned`, `in-progress` or `shipped`) is **derived** from `--deliver` and its members and is never stored, so there is no `--status` flag. `here` is a reserved release id, like `show`.
 
 `release show` prints the plan fields and marks the release `(here)`. The `render` verb ([`/pm:status`](/commands/status)) prints a `here:` line and, once a [mission milestone](/commands/mission) exists, `(critical path)` marks. `PROJECT.md` and the SessionStart brief carry neither. `release --help` and its missing-id usage name `release here`, the plan fields and the clearable fields.
 
+## The 80/20 report
+
+Every member of a release, in any lane, is counted once as `health`, `initiative-work` or `unaligned`. Health is bugs, security fixes, dependency and stack upgrades, deprecation work, and test and tooling debt, never new internal capability; an epic records it with `--kind` ([`epic`](/commands/epic)). A `claude-code` epic with no kind reads as initiative work when it names an initiative and as health otherwise. An epic carrying `--off-initiative-reason` stays `unaligned`.
+
+The health share is compared with a fixed 20% target. It is flagged as drift below 10% or above 30%, so 1, 2 and 3 of 10 do not drift, and 0 of 10 and 4 of 10 do. The report is derived on read, never stored, and there is no flag that turns it off or moves the target. `release show` prints the purpose, the split with its band and a `, DRIFT` suffix, a warning when no member serves the primary initiative, and `N epics added since the first member started`. That count reads `releaseJoinedAt`, which `release --member` records on a join, keeps on a repeat, replaces on a move, and which `--unmember` and `--defer` remove.
+
+While the active epic is a release member, the commit nudge for an untied commit names a per-release `maintenance-<releaseId>` epic for maintenance work and a small `claude-code` epic for a tweak that moves an initiative.
+
 ## How the release plan board uses them
 
-The release plan board reads the mission and "we are here" as one header with the plan line, keeps only in-progress and planned releases in its roadmap, and lists shipped releases in a Shipped table at the bottom, with "N of M shipped" and, for a release that did not ship everything, what did not ship and the recorded reason. `board --json` carries that as each release's derived `unshipped` array. See [`/pm:boards`](/commands/boards).
+The release plan board reads the mission and "we are here" as one header with the plan line, keeps only in-progress and planned releases in its roadmap, and lists shipped releases in a Shipped table at the bottom, with "N of M shipped" and, for a release that did not ship everything, what did not ship and the recorded reason. `board --json` carries that as each release's derived `unshipped` array. Each release card also shows its primary initiative (or "Maintenance"), its split with the unaligned count and drift mark, the unserved-primary warning, the scope-added line and its "Not doing" list. See [`/pm:boards`](/commands/boards).
 
